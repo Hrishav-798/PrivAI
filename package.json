@@ -1,0 +1,24 @@
+{
+  "name": "privai-browser-agent",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Privacy-preserving browser agent with on-device visual perception (SIH 26171)",
+  "scripts": {
+    "ext:install": "cd extension && npm install",
+    "ext:dev": "cd extension && npm run dev",
+    "ext:build": "cd extension && npm run build",
+    "ext:test": "cd extension && npm test",
+    "backend:install": "cd backend && pip install -r requirements.txt",
+    "backend:dev": "cd backend && uvicorn app.main:app --reload --host 0.0.0.0 --port 8000",
+    "demo:serve": "cd demo-site && python3 -m http.server 3000",
+    "docker:up": "docker compose up --build",
+    "docker:down": "docker compose down"
+  },
+  "license": "MIT",
+  "devDependencies": {
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.7",
+    "@vitejs/plugin-react-swc": "^4.3.3",
+    "jsdom": "^30.0.1"
+  }
+}

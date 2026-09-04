@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Kubernetes Horizontal Pod Autoscaling — DocSearch</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="header">
+    <div class="header-inner">
+      <a href="index.html" class="logo">📚 DocSearch</a>
+      <nav class="nav">
+        <a href="index.html" class="nav-link">Home</a>
+        <a href="#" class="nav-link active">Documentation</a>
+        <a href="#" class="nav-link">API Reference</a>
+        <a href="#" class="nav-link">Community</a>
+      </nav>
+      <div class="user-info">
+        <img src="assets/face-synthetic.svg" alt="User Avatar" class="avatar" width="36" height="36">
+        <span class="user-name">Hrishav Demo</span>
+      </div>
+    </div>
+  </header>
+
+  <main class="main">
+    <section class="content docs-content">
+      <div class="breadcrumb">
+        <a href="index.html">Home</a> / <a href="#">Documentation</a> / <a href="#">Kubernetes</a> / <strong>Horizontal Pod Autoscaling</strong>
+      </div>
+
+      <h1>Horizontal Pod Autoscaling (HPA)</h1>
+      <p class="result-source">kubernetes.io — Official Documentation</p>
+
+      <h2>Overview</h2>
+      <p>
+        In Kubernetes, a <strong>HorizontalPodAutoscaler</strong> automatically updates a workload resource
+        (such as a Deployment or StatefulSet) with the aim of automatically scaling the workload to match demand.
+      </p>
+      <p>
+        Horizontal scaling means that the response to increased load is to deploy more Pods.
+        This is different from vertical scaling, which means increasing the resources (CPU or memory)
+        assigned to existing Pods.
+      </p>
+      <p>
+        If the load decreases, and the number of Pods is above the configured minimum,
+        the HorizontalPodAutoscaler instructs the workload resource to scale back down.
+      </p>
+
+      <h2>How does an HPA work?</h2>
+      <p>
+        The HPA is implemented as a Kubernetes API resource and a controller. The resource determines
+        the behavior of the controller. The horizontal pod autoscaling controller, running within
+        the Kubernetes control plane, periodically adjusts the desired scale of its target to match
+        observed metrics such as average CPU utilization, average memory utilization, or any other
+        custom metric you specify.
+      </p>
+
+      <h3>Algorithm Details</h3>
+      <p>
+        The HPA controller calculates the desired number of replicas using the formula:
+      </p>
+      <pre>desiredReplicas = ceil[currentReplicas * (currentMetricValue / desiredMetricValue)]</pre>
+
+      <h2>Example HPA Configuration</h2>
+      <pre>apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: my-app-hpa
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: my-app
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 50
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 70</pre>
+
+      <h2>Supported Metric Types</h2>
+      <ul>
+        <li><strong>Resource metrics</strong> — CPU and memory utilization of Pods</li>
+        <li><strong>Custom metrics</strong> — Application-specific metrics (e.g., requests per second)</li>
+        <li><strong>External metrics</strong> — Metrics from outside the cluster (e.g., queue length)</li>
+        <li><strong>Object metrics</strong> — Metrics from other Kubernetes objects</li>
+      </ul>
+
+      <h2>Scaling Behavior</h2>
+      <p>
+        You can configure scaling policies that control how fast the HPA scales up or down.
+        The <code>behavior</code> field allows you to set stabilization windows and rate limits:
+      </p>
+      <pre>behavior:
+  scaleDown:
+    stabilizationWindowSeconds: 300
+    policies:
+    - type: Percent
+      value: 10
+      periodSeconds: 60
+  scaleUp:
+    stabilizationWindowSeconds: 0
+    policies:
+    - type: Percent
+      value: 100
+      periodSeconds: 15
+    - type: Pods
+      value: 4
+      periodSeconds: 15
+    selectPolicy: Max</pre>
+
+      <h2>Best Practices</h2>
+      <ol>
+        <li>Always set <code>minReplicas</code> to at least 2 for production workloads</li>
+        <li>Use resource requests on all Pods for accurate CPU-based scaling</li>
+        <li>Consider using custom metrics for more precise scaling decisions</li>
+        <li>Set appropriate stabilization windows to prevent flapping</li>
+        <li>Monitor HPA events to understand scaling decisions</li>
+        <li>Test scaling behavior under load before going to production</li>
+      </ol>
+
+      <h2>Useful Commands</h2>
+      <pre># Create an HPA
+kubectl autoscale deployment my-app --cpu-percent=50 --min=2 --max=10
+
+# Check HPA status
+kubectl get hpa
+
+# Describe HPA details
+kubectl describe hpa my-app-hpa
+
+# Watch HPA in action
+kubectl get hpa --watch</pre>
+
+      <h2>Related Topics</h2>
+      <ul>
+        <li><a href="#">Vertical Pod Autoscaler (VPA)</a></li>
+        <li><a href="#">Cluster Autoscaler</a></li>
+        <li><a href="#">Resource Quotas</a></li>
+        <li><a href="#">Metrics Server</a></li>
+      </ul>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <p>DocSearch Demo — Synthetic test data for PrivAI browser agent testing</p>
+    <p class="disclaimer">⚠️ All personal information displayed is synthetic and for demonstration purposes only.</p>
+  </footer>
+</body>
+</html>

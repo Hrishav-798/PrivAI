@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="80" height="80" viewBox="0 0 80 80">
+  <!-- Synthetic face placeholder for privacy testing -->
+  <circle cx="40" cy="40" r="38" fill="#e1e4e8" stroke="#d0d7de" stroke-width="2"/>
+  <!-- Hair -->
+  <ellipse cx="40" cy="24" rx="26" ry="18" fill="#6a4c3a"/>
+  <!-- Face -->
+  <ellipse cx="40" cy="38" rx="22" ry="24" fill="#f0d0b0"/>
+  <!-- Eyes -->
+  <ellipse cx="32" cy="34" rx="3.5" ry="2.5" fill="#3a3a3a"/>
+  <ellipse cx="48" cy="34" rx="3.5" ry="2.5" fill="#3a3a3a"/>
+  <!-- Eye whites -->
+  <circle cx="33" cy="33.5" r="1" fill="#ffffff"/>
+  <circle cx="49" cy="33.5" r="1" fill="#ffffff"/>
+  <!-- Nose -->
+  <ellipse cx="40" cy="42" rx="3" ry="4" fill="#e0c0a0"/>
+  <!-- Mouth -->
+  <path d="M 33 50 Q 40 56 47 50" fill="none" stroke="#c0846a" stroke-width="1.5" stroke-linecap="round"/>
+  <!-- Ears -->
+  <ellipse cx="18" cy="38" rx="4" ry="6" fill="#f0d0b0"/>
+  <ellipse cx="62" cy="38" rx="4" ry="6" fill="#f0d0b0"/>
+</svg>
