@@ -18,18 +18,28 @@ export class LocalVisionModel implements ILocalVisionModel {
   private readonly modelName = 'UltraFace Slim (320x240)';
 
   async initialize(): Promise<void> {
-    ort.env.wasm.wasmPaths = chrome.runtime.getURL('/');
+    if (ort.env) {
+      ort.env.logLevel = 'error';
+      if (ort.env.wasm) {
+        ort.env.wasm.wasmPaths = chrome?.runtime?.getURL ? chrome.runtime.getURL('wasm/') : '';
+        ort.env.wasm.numThreads = 1;
+      }
+    }
+
+    const modelPath = chrome?.runtime?.getURL ? chrome.runtime.getURL('models/ultraface.onnx') : 'models/ultraface.onnx';
 
     try {
-      this.session = await ort.InferenceSession.create(chrome.runtime.getURL('models/ultraface.onnx'), {
-        executionProviders: ['webgpu']
+      this.session = await ort.InferenceSession.create(modelPath, {
+        executionProviders: ['webgpu'],
+        logSeverityLevel: 3,
       });
       this.backend = 'webgpu';
     } catch (e) {
       console.warn("WebGPU not available, falling back to WASM", e);
       try {
-        this.session = await ort.InferenceSession.create(chrome.runtime.getURL('models/ultraface.onnx'), {
-          executionProviders: ['wasm']
+        this.session = await ort.InferenceSession.create(modelPath, {
+          executionProviders: ['wasm'],
+          logSeverityLevel: 3,
         });
         this.backend = 'wasm';
       } catch (e2) {

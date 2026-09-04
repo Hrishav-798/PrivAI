@@ -11,6 +11,7 @@ export default defineConfig({
     rollupOptions: {
       input: {
         popup: resolve(__dirname, 'src/popup/popup.html'),
+        offscreen: resolve(__dirname, 'src/offscreen/offscreen.html'),
         background: resolve(__dirname, 'src/background/service-worker.ts'),
         content: resolve(__dirname, 'src/content/content-script.ts'),
       },
@@ -18,6 +19,7 @@ export default defineConfig({
         entryFileNames: (chunkInfo) => {
           if (chunkInfo.name === 'background') return 'background/service-worker.js';
           if (chunkInfo.name === 'content') return 'content/content-script.js';
+          if (chunkInfo.name === 'offscreen') return 'offscreen/offscreen.js';
           return '[name]/[name].js';
         },
         chunkFileNames: 'chunks/[name]-[hash].js',

@@ -7,7 +7,8 @@
     "activeTab",
     "scripting",
     "storage",
-    "tabs"
+    "tabs",
+    "offscreen"
   ],
   "host_permissions": [
     "<all_urls>"
@@ -41,7 +42,7 @@
   },
   "web_accessible_resources": [
     {
-      "resources": ["models/*", "assets/*"],
+      "resources": ["models/*", "assets/*", "wasm/*"],
       "matches": ["<all_urls>"]
     }
   ]

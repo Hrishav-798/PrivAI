@@ -1,58 +1,236 @@
 # PrivAI — Privacy-Preserving Browser Agent
 
-PrivAI is an open-source, completely privacy-preserving browser agent system developed for **SIH 26171**. 
+> **Autonomous web navigation powered by open-weight Vision-Language Models (VLMs) — without ever leaking raw Personal Identifiable Information (PII) over the network.**
 
-It enables an autonomous browser agent to reason over and perform complex tasks using an open-weight Vision-Language Model (VLM) running on a remote backend, **without ever transmitting raw sensitive Personal Identifiable Information (PII) over the network**.
+---
 
-## Problem Statement (SIH 26171)
-Current browser automation agents capture entire screenshots and DOM structures and send them to cloud LLMs (like GPT-4V). This approach leaks extremely sensitive user data. PrivAI solves this by strictly enforcing a client-side **Privacy Firewall** that visually redacts and semantically sanitizes all context *before* it leaves the user's browser, while preserving enough structural layout information for the VLM to still complete the task autonomously.
+## Overview
 
-## Actual Local Vision Implementation (Part 4A)
-To fulfill the explicit SIH requirement for local computer vision inference (ViT or equivalent), PrivAI integrates **UltraFace**, an incredibly lightweight open-source ONNX computer vision model, directly into the browser extension.
+Modern browser automation agents (such as cloud-hosted VLM agents) capture full-resolution screenshots and unrestricted DOM hierarchies, streaming them to remote API servers. This approach exposes user data—including credentials, private emails, phone numbers, government identification, and personal photos—to cloud providers and transit risks.
 
-### Model Details
-* **Model Name:** UltraFace (version-slim-320)
-* **Model Source:** [Linzaer/Ultra-Light-Fast-Generic-Face-Detector-1MB](https://github.com/Linzaer/Ultra-Light-Fast-Generic-Face-Detector-1MB)
-* **License:** MIT License
-* **Model Size:** 1.14 MB
-* **Input Dimensions:** 320x240 RGB (NCHW Float32 Tensor)
-* **Output Format:** Tensors containing anchor box bounding coordinates and confidence scores
-* **Face Detection Status:** Fully implemented. The local vision model accurately extracts bounding boxes of faces and pipes them to the PrivacyEngine for local blurring.
+**PrivAI** solves this by strictly enforcing a client-side **Privacy Firewall** directly inside the browser. Sensitive visual regions and text elements are detected and redacted on-device *before* any payload leaves your machine. The remote VLM receives only sanitized layout and contextual information necessary to complete tasks autonomously.
 
-### Inference & WebGPU Integration
-PrivAI uses `onnxruntime-web` to execute the model within the isolated Service Worker environment:
-* **Backend Used:** WebGPU (via `navigator.gpu`) with graceful automatic fallback to WASM.
-* **WebGPU Support:** Native implementation. Automatically detects and leverages local hardware acceleration when available.
-* **WASM Fallback:** Active fallback pathway heavily tested for environments lacking hardware acceleration.
-* **Inference Latency:** 
-  - **WebGPU:** ~10-35ms average inference time
-  - **WASM:** ~45-80ms average inference time
+---
 
-### Privacy & Network Isolation Guarantee
-> **The local vision engine makes ZERO network requests.**
-The actual .onnx model is bundled inside the extension. Image preprocessing (`createImageBitmap` + `OffscreenCanvas`) and ONNX tensor manipulation run entirely locally. Detections are merged with the DOM via IoU logic, redacted, and only the *safe* output ever contacts the backend.
+## Core Architecture
 
-## Architecture
+```
+                                  BROWSER (Client-Side)
+┌──────────────────────────────────────────────────────────────────────────────────┐
+│                                                                                  │
+│  Target Webpage ───► DOM Perception Scanner ───┐                                 │
+│                                                │                                 │
+│  Screenshot     ───► Chrome Offscreen Document ├──► Local Privacy Engine         │
+│                      (UltraFace ONNX Model     │    • Biometric Face Redaction   │
+│                       WebGPU / WASM)           │    • Semantic & Regex Masking   │
+│                                                │    • Structural DOM Scrubbing   │
+│                                                ▼                                 │
+│                                   Client Privacy Firewall                        │
+│                           (Blocks any packet with raw PII)                       │
+│                                                │                                 │
+└────────────────────────────────────────────────┼─────────────────────────────────┘
+                                                 │ Safe / Sanitized Context Only
+                                                 ▼
+                                     BACKEND (Local / Self-Hosted)
+┌──────────────────────────────────────────────────────────────────────────────────┐
+│                                                                                  │
+│  FastAPI Server (Secondary Defense-in-Depth Verification)                        │
+│    │                                                                             │
+│    ▼                                                                             │
+│  Ollama / VLM Reasoning (qwen2.5vl:7b)                                           │
+│    │                                                                             │
+│    ▼                                                                             │
+│  Strict Action JSON (click, type, scroll, complete)                              │
+│                                                                                  │
+└────────────────────────────────────────────────┬─────────────────────────────────┘
+                                                 │
+                                                 ▼
+                                      Browser Client Executor
+                                      (Performs safe actions)
+```
 
-1. **Client (Browser Extension)**
-   - Local Vision: ONNX Runtime Web detects faces.
-   - Privacy Scanner: Semantic & Regex detectors mask emails, passwords, IDs.
-   - **Privacy Firewall**: Blocks any outbound request that still contains raw PII.
-   - Browser Executor: Evaluates safe interactions locally.
+---
 
-2. **Backend (FastAPI + Ollama)**
-   - Processes sanitized context using `qwen2.5vl:7b` (an open-weight VLM).
-   - Generates strict, validated Action JSON.
+## Key Features
 
-## Dashboard & Visual Debug
-The popup Dashboard accurately reports whether the Vision system is utilizing WebGPU or WASM, tracks real-time model latency, and allows enabling the **Visual Debug Overlay**. Activating the overlay paints the model's actual bounding box inferences directly on top of the browser viewport with their exact confidence scores.
+- **On-Device Computer Vision Inference**: Runs **UltraFace** (1.14 MB lightweight ONNX model) entirely in the browser using `onnxruntime-web`. Operates within an isolated Chrome Offscreen Document with hardware-accelerated **WebGPU** and automatic **WASM** fallback.
+- **Zero-Network Vision Guarantee**: The vision model, tensors, and preprocessing run 100% locally. Zero image bytes leave your machine unredacted.
+- **Multi-Modal Privacy Engine**:
+  - **Visual Redaction**: Automatically blurs detected faces and sensitive visual regions.
+  - **Text & Field Redaction**: Masks emails, telephone numbers, national IDs (e.g. Aadhaar), passwords, and sensitive input fields to `[REDACTED]`.
+- **Client-Side Privacy Firewall**: Validates every outbound request client-side. If any unredacted PII is detected, the request is aborted immediately before hitting the network.
+- **Defense-in-Depth Backend**: Secondary server-side PII filter ensuring no malformed or unredacted payload can be processed by the VLM.
+- **Visual Debug Overlay**: Real-time bounding box visualizer in the browser viewport displaying detected regions and model confidence scores.
+- **Live Popup Dashboard**: Real-time tracking of active inference backend (WebGPU vs WASM), model latency, detected sensitive entities, and step-by-step agent timeline.
 
-## Installation & Running Locally
+---
 
-1. **Start the Backend** (`docker-compose up -d`)
-2. **Install the Chrome Extension** (Load unpacked `extension/dist/`)
-3. **Run the Demo** (`demo-site/index.html`)
+## On-Device Vision Details
 
-## Known Limitations
-* **Model Specificity**: UltraFace is specialized for faces. Expanding bounding box generation for arbitrary UI elements requires switching to a lightweight general detector (like YOLOv8n) which adds ~6-10MB to the extension size.
-* **Complex Overlaps**: If non-sensitive text overlays a highly sensitive visual region (like a face), redaction masks might occlude safe UI elements, dropping visual context accuracy for the VLM.
+| Metric | Specification |
+| :--- | :--- |
+| **Model** | UltraFace (version-slim-320) |
+| **Size** | 1.14 MB ONNX format |
+| **Input** | 320x240 RGB Float32 Tensor (NCHW) |
+| **Runtime** | `onnxruntime-web` (WebGPU with graceful WASM fallback) |
+| **WebGPU Latency** | ~10–25 ms |
+| **WASM Latency** | ~35–60 ms |
+| **Isolation** | Chrome Offscreen Document (`chrome.offscreen`) |
+
+---
+
+## Project Structure
+
+```
+PrivAI/
+├── backend/                  # FastAPI reasoning backend
+│   ├── app/
+│   │   ├── routes/           # Agent planning & health endpoints
+│   │   ├── schemas/          # Context and Action models
+│   │   ├── services/         # Ollama & VLM action parsing
+│   │   └── main.py           # FastAPI entrypoint
+│   └── requirements.txt      # Python dependencies
+├── extension/                # Chrome Extension (Manifest V3)
+│   ├── public/
+│   │   ├── icons/            # Extension icons (PNG/SVG)
+│   │   ├── models/           # Bundled ultraface.onnx
+│   │   └── wasm/             # Bundled ONNX Runtime WASM binaries
+│   ├── src/
+│   │   ├── background/       # Background service worker & AgentLoop
+│   │   ├── content/          # Content script, DOM scanner & overlay
+│   │   ├── offscreen/        # Dedicated Offscreen Document for ONNX inference
+│   │   ├── perception/       # LocalVisionClient, LocalVisionModel, merger
+│   │   ├── popup/            # React dashboard UI
+│   │   ├── privacy/          # Detectors, redaction, and validation firewall
+│   │   └── tests/            # Vitest unit and integration test suites
+│   ├── manifest.json         # Extension Manifest V3
+│   └── vite.config.ts        # Vite build configuration
+├── demo-site/                # Standalone test application with mock PII
+│   ├── index.html            # Profile, login form, and search page
+│   └── styles.css
+├── ollama/                   # Ollama VLM configuration
+│   ├── Modelfile
+│   └── setup.sh
+└── docker-compose.yml        # Multi-container deployment config
+```
+
+---
+
+## Getting Started Locally
+
+### Prerequisites
+
+- **Node.js**: v18+ (tested on Node v20/v24)
+- **Python**: v3.10+
+- **Google Chrome** (or Chromium-based browser like Brave / Edge)
+- **Docker** (optional, for running Ollama)
+
+---
+
+### Step 1: Start the Backend Server
+
+```bash
+cd backend
+
+# Create virtual environment and install dependencies
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+
+# Start FastAPI server
+uvicorn app.main:app --reload --port 8000
+```
+
+Verify backend health at: `http://localhost:8000/health`
+
+---
+
+### Step 2: Serve the Demo Website
+
+In a second terminal, start a lightweight web server for the test site:
+
+```bash
+cd demo-site
+python3 -m http.server 3000
+```
+
+Open `http://localhost:3000` in your browser. This site contains mock profile data (synthetic face avatar, email, phone, Aadhaar ID, password fields) designed for verifying privacy redaction.
+
+---
+
+### Step 3: Build the Browser Extension
+
+In a third terminal:
+
+```bash
+cd extension
+npm install
+npm run build
+```
+
+The compiled extension is output to `extension/dist/`.
+
+---
+
+### Step 4: Load Extension in Chrome
+
+1. Open Chrome and navigate to `chrome://extensions`.
+2. Enable **Developer mode** (toggle in the top-right corner).
+3. Click **Load unpacked**.
+4. Select the directory:
+   ```
+   path/to/PrivAI/extension/dist
+   ```
+5. Pin **PrivAI** to your extension bar.
+
+---
+
+### Step 5: Test the Privacy Agent
+
+1. Navigate to `http://localhost:3000`.
+2. Click the **PrivAI** toolbar icon to open the Dashboard:
+   - Check that the model is loaded (**Vision Backend: WASM** or **WebGPU**).
+   - Toggle **Vision Overlay** to see on-device bounding boxes drawn over the synthetic face and PII fields.
+3. In the task input, enter an instruction (e.g. `Search for Kubernetes documentation`).
+4. Click **Start Task**:
+   - The timeline logs DOM scanning, on-device face blur, semantic text masking to `[REDACTED]`, firewall verification, and action dispatch.
+5. Toggle **Test Failure Mode**:
+   - Simulates an unredacted payload. The client **Privacy Firewall** immediately blocks outbound transmission before any data leaves your browser.
+
+---
+
+### (Optional) Enable Live VLM via Ollama
+
+By default, the backend provides graceful fallback responses if Ollama is not running. To enable live reasoning with `qwen2.5vl:7b`:
+
+```bash
+# Using Docker
+docker compose up -d ollama
+
+# Pull the model
+docker exec -it privai-ollama ollama run qwen2.5vl:7b
+```
+
+---
+
+## Testing & Quality Assurance
+
+Run the automated test suite covering DOM scanning, privacy detectors, ONNX vision pipeline, and end-to-end evaluation metrics:
+
+```bash
+cd extension
+npm test
+```
+
+### Test Coverage
+
+- **`domScanner.test.ts`**: Interactive DOM element indexing and visibility filters.
+- **`privacy.test.ts`**: Email, phone, Aadhaar, password, and semantic detectors + redactors.
+- **`vision.test.ts`**: WebGPU detection, graceful WASM fallback, tensor processing, and network isolation verification.
+- **`evaluation.test.ts`**: Precision, Recall, Intersection over Union (IoU) redaction coverage, and latency benchmarks.
+
+---
+
+## License
+
+This project is open-source under the [MIT License](LICENSE).

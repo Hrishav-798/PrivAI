@@ -1,7 +1,8 @@
 import { AgentState, DashboardState, RawContext, SanitizedContext, TimelineEntry, PerformanceMetrics, ActionResponse, Action } from '../types';
 import { PrivacyEngine } from '../privacy/PrivacyEngine';
 import { validateAction } from './actionValidator';
-import { LocalVisionModel } from '../perception/LocalVisionModel';
+import { ILocalVisionModel } from '../perception/LocalVisionModel';
+import { LocalVisionClient } from '../perception/LocalVisionClient';
 import { mergeDetections } from '../perception/detectionMerger';
 import { SensitiveRegion } from '../types';
 
@@ -9,12 +10,12 @@ export class AgentLoop {
   private state: DashboardState;
   private isRunning: boolean = false;
   private privacyEngine: PrivacyEngine;
-  private localVision: LocalVisionModel;
+  private localVision: ILocalVisionModel;
   private testFailureMode: boolean = false;
 
   constructor() {
     this.privacyEngine = new PrivacyEngine();
-    this.localVision = new LocalVisionModel();
+    this.localVision = new LocalVisionClient();
     this.state = this.getInitialState();
     
     // Initialize vision model asynchronously
