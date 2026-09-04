@@ -6,7 +6,7 @@ vi.mock('../privacy/redaction', () => ({
   redactScreenshot: vi.fn().mockResolvedValue('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==')
 }));
 
-describe('SIH Metrics Evaluation', () => {
+describe('Privacy Engine Metrics Evaluation', () => {
   let engine: PrivacyEngine;
 
   beforeEach(() => {
@@ -14,7 +14,7 @@ describe('SIH Metrics Evaluation', () => {
   });
 
   it('calculates PII Precision and Recall correctly', async () => {
-    // This is a synthetic evaluation test as required by SIH Part 4
+    // Ground truth evaluation for precision and recall
     
     // 1. Mock ground truth: 
     // We know there are exactly 2 pieces of PII in this DOM snippet:
@@ -62,8 +62,7 @@ describe('SIH Metrics Evaluation', () => {
   });
 
   it('measures Redaction Precision via IoU (Intersection over Union)', async () => {
-    // For visual redaction, SIH requires bounding box evaluation.
-    // Let's assume ground truth for a password field is {x:10, y:10, w:100, h:20}
+    // Measure bounding box coverage via IoU against ground truth
     const groundTruthBBox = { x: 10, y: 10, width: 100, height: 20 };
     
     const mockElements: DOMElement[] = [

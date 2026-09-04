@@ -83,6 +83,10 @@ export class LocalVisionClient implements ILocalVisionModel {
     return this.lastInferenceTime;
   }
 
+  getPriorsCount(): number {
+    return 4420;
+  }
+
   private async ensureOffscreenDocument(): Promise<void> {
     if (typeof chrome === 'undefined' || !chrome.offscreen) {
       throw new Error('chrome.offscreen API not available in current environment');

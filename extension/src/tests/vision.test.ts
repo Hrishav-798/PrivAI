@@ -23,9 +23,14 @@ vi.mock('onnxruntime-web', () => {
         }
         return Promise.resolve({
           inputNames: ['input'],
-          run: vi.fn().mockResolvedValue({
-            scores: { data: new Float32Array(4420 * 2).fill(0.1).map((v, i) => i === 1 ? 0.95 : v) }, // High confidence at index 0
-            boxes: { data: new Float32Array(4420 * 4).fill(0.1) } // Dummy box
+          run: vi.fn().mockImplementation(() => {
+            if ((global as any).__mockRunOutputs) {
+              return Promise.resolve((global as any).__mockRunOutputs);
+            }
+            return Promise.resolve({
+              scores: { data: new Float32Array(4420 * 2).fill(0.01).map((v, i) => (i === 1 ? 0.95 : v)) }, // High confidence at index 0 (face score at index 1)
+              boxes: { data: new Float32Array(4420 * 4).fill(0.0) } // Delta 0
+            });
           })
         });
       })
@@ -111,9 +116,110 @@ describe('Local Vision Pipeline Integration Tests', () => {
       expect(face.confidence).toBeCloseTo(0.95);
       expect(face.source).toBe('local-vision');
       
-      // BBox coordinates must be mapped back to screenshot dims (simulated mapping logic in postprocess)
+      // BBox coordinates must be mapped back to screenshot dims
       expect(face.bbox.x).toBeGreaterThanOrEqual(0);
       expect(face.bbox.width).toBeGreaterThanOrEqual(0);
+    });
+
+    it('produces exactly 4420 multi-scale SSD prior boxes', () => {
+      expect(vision.getPriorsCount()).toBe(4420);
+      expect(LocalVisionModel.generatePriors().length).toBe(4420);
+    });
+
+    it('decodes bounding boxes to accurate quadrants instead of fixed coordinates', async () => {
+      const origWidth = 800;
+      const origHeight = 600;
+
+      // 1. Activate an anchor in the top-left (Anchor 0)
+      const scoresTopLeft = new Float32Array(4420 * 2).fill(0.01);
+      scoresTopLeft[0 * 2 + 1] = 0.95; // Face score for anchor 0
+      const boxesTopLeft = new Float32Array(4420 * 4).fill(0.0);
+
+      (global as any).__mockRunOutputs = {
+        scores: { data: scoresTopLeft },
+        boxes: { data: boxesTopLeft },
+      };
+
+      const detectionsTopLeft = await vision.detect(new Blob(), origWidth, origHeight);
+      expect(detectionsTopLeft.length).toBe(1);
+      const boxTL = detectionsTopLeft[0].bbox;
+      const centerTLX = boxTL.x + boxTL.width / 2;
+      const centerTLY = boxTL.y + boxTL.height / 2;
+
+      // Top-left quadrant: center within first 25% of width and height
+      expect(centerTLX).toBeLessThan(origWidth * 0.25);
+      expect(centerTLY).toBeLessThan(origHeight * 0.25);
+
+      // 2. Activate an anchor in the bottom-right (Anchor 3597: Stride 8 cell row 29, col 39)
+      const scoresBottomRight = new Float32Array(4420 * 2).fill(0.01);
+      scoresBottomRight[3597 * 2 + 1] = 0.95; // Face score for anchor 3597
+      const boxesBottomRight = new Float32Array(4420 * 4).fill(0.0);
+
+      (global as any).__mockRunOutputs = {
+        scores: { data: scoresBottomRight },
+        boxes: { data: boxesBottomRight },
+      };
+
+      const detectionsBottomRight = await vision.detect(new Blob(), origWidth, origHeight);
+      expect(detectionsBottomRight.length).toBe(1);
+      const boxBR = detectionsBottomRight[0].bbox;
+      const centerBRX = boxBR.x + boxBR.width / 2;
+      const centerBRY = boxBR.y + boxBR.height / 2;
+
+      // Bottom-right quadrant: center beyond 75% of width and height
+      expect(centerBRX).toBeGreaterThan(origWidth * 0.75);
+      expect(centerBRY).toBeGreaterThan(origHeight * 0.75);
+
+      // Assert that the two bounding boxes are clearly distinct and not hardcoded
+      expect(boxTL.x).not.toBe(boxBR.x);
+      expect(boxTL.y).not.toBe(boxBR.y);
+
+      delete (global as any).__mockRunOutputs;
+    });
+
+    it('collapses multiple overlapping anchors near the same face into one box via NMS', async () => {
+      const origWidth = 800;
+      const origHeight = 600;
+
+      // Activate both Anchor 0 and Anchor 1 at the same feature cell (0, 0)
+      const scores = new Float32Array(4420 * 2).fill(0.01);
+      scores[0 * 2 + 1] = 0.95; // Face score for anchor 0
+      scores[1 * 2 + 1] = 0.88; // Face score for anchor 1 (overlapping)
+      const boxes = new Float32Array(4420 * 4).fill(0.0);
+
+      (global as any).__mockRunOutputs = {
+        scores: { data: scores },
+        boxes: { data: boxes },
+      };
+
+      const detections = await vision.detect(new Blob(), origWidth, origHeight);
+      // Because Anchor 0 and Anchor 1 overlap significantly, NMS must collapse them to 1
+      expect(detections.length).toBe(1);
+      expect(detections[0].confidence).toBeCloseTo(0.95);
+
+      delete (global as any).__mockRunOutputs;
+    });
+
+    it('retains multiple distinct non-overlapping faces after NMS', async () => {
+      const origWidth = 800;
+      const origHeight = 600;
+
+      // Activate both Anchor 0 (top-left) and Anchor 3597 (bottom-right)
+      const scores = new Float32Array(4420 * 2).fill(0.01);
+      scores[0 * 2 + 1] = 0.92;
+      scores[3597 * 2 + 1] = 0.89;
+      const boxes = new Float32Array(4420 * 4).fill(0.0);
+
+      (global as any).__mockRunOutputs = {
+        scores: { data: scores },
+        boxes: { data: boxes },
+      };
+
+      const detections = await vision.detect(new Blob(), origWidth, origHeight);
+      // Both should survive because IoU == 0
+      expect(detections.length).toBe(2);
+
+      delete (global as any).__mockRunOutputs;
     });
   });
 

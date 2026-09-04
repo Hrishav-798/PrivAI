@@ -20,7 +20,8 @@ export class PrivacyEngine {
       new PhoneDetector(),
       new IdDetector(),
       new SemanticDetector(),
-      new FaceDetector(),
+      // Note: Face detection is supplied via visionRegions (LocalVisionModel / UltraFace ONNX),
+      // not through DOM text scanners.
     ];
   }
 
