@@ -8,15 +8,19 @@ export class EmailDetector implements Detector {
     const emailRegex = /([a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9_-]+)/gi;
 
     for (const el of dom.elements) {
+      const elId = el.element_id || el.id;
       const isEmailInput = 
         el.input_type === 'email' ||
+        el.type === 'email' ||
         el.autocomplete === 'email' ||
         el.element_id?.toLowerCase().includes('email') ||
-        el.label?.toLowerCase().includes('email');
+        el.id?.toLowerCase().includes('email') ||
+        el.label?.toLowerCase().includes('email') ||
+        el.placeholder?.toLowerCase().includes('email');
 
       if (isEmailInput) {
         regions.push({
-          id: `email_${el.element_id}`,
+          id: `email_${elId}`,
           type: 'email',
           bbox: el.bbox,
           confidence: 1.0,
@@ -31,7 +35,7 @@ export class EmailDetector implements Detector {
         const matches = el.text.match(emailRegex);
         if (matches && matches.length > 0) {
           regions.push({
-            id: `email_${el.element_id}`,
+            id: `email_${elId}`,
             type: 'email',
             bbox: el.bbox,
             confidence: 0.9,

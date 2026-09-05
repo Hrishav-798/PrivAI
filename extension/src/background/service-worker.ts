@@ -16,7 +16,8 @@ chrome.runtime.onMessage.addListener((message: any, sender, sendResponse) => {
   }
 
   if (message.type === 'START_TASK') {
-    agent.startTask(message.payload);
+    const tabId = sender.tab?.id;
+    agent.startTask(message.payload, tabId);
     sendResponse({ success: true });
     return false;
   }

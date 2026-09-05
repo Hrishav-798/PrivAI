@@ -1,18 +1,23 @@
 import { SensitiveRegion } from '../../types';
 
-export function applyBlur(ctx: CanvasRenderingContext2D, region: SensitiveRegion, image: HTMLImageElement | HTMLCanvasElement) {
-  // Save context state
+export function applyBlur(
+  ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D,
+  region: SensitiveRegion,
+  image: CanvasImageSource
+) {
   ctx.save();
-  
-  // Set clipping path to the region
   ctx.beginPath();
   ctx.rect(region.bbox.x, region.bbox.y, region.bbox.width, region.bbox.height);
   ctx.clip();
-  
-  // Apply blur filter and redraw the image in the clipped area
-  ctx.filter = 'blur(10px)';
-  ctx.drawImage(image, 0, 0);
-  
-  // Restore state
+
+  try {
+    (ctx as any).filter = 'blur(14px)';
+    ctx.drawImage(image, 0, 0);
+  } catch {
+    // Fallback if filter not supported on specific canvas implementation
+    ctx.fillStyle = 'rgba(70, 80, 95, 0.92)';
+    ctx.fillRect(region.bbox.x, region.bbox.y, region.bbox.width, region.bbox.height);
+  }
+
   ctx.restore();
 }

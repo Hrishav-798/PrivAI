@@ -9,15 +9,19 @@ export class PhoneDetector implements Detector {
     const phoneRegex = /(\+?91[\-\s]?)?[6789]\d{9}|(\+\d{1,3}[\s-]?)?\(?\d{3}\)?[\s-]?\d{3}[\s-]?\d{4}/g;
 
     for (const el of dom.elements) {
+      const elId = el.element_id || el.id;
       const isPhoneInput = 
         el.input_type === 'tel' ||
+        el.type === 'tel' ||
         el.autocomplete === 'tel' ||
         el.element_id?.toLowerCase().includes('phone') ||
-        el.label?.toLowerCase().includes('phone');
+        el.id?.toLowerCase().includes('phone') ||
+        el.label?.toLowerCase().includes('phone') ||
+        el.placeholder?.toLowerCase().includes('phone');
 
       if (isPhoneInput) {
         regions.push({
-          id: `phone_${el.element_id}`,
+          id: `phone_${elId}`,
           type: 'phone',
           bbox: el.bbox,
           confidence: 1.0,
@@ -32,7 +36,7 @@ export class PhoneDetector implements Detector {
         const matches = el.text.match(phoneRegex);
         if (matches && matches.length > 0) {
           regions.push({
-            id: `phone_${el.element_id}`,
+            id: `phone_${elId}`,
             type: 'phone',
             bbox: el.bbox,
             confidence: 0.85,

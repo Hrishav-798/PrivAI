@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PrivAI Demo — Search Documentation</title>
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    .search-wrapper {
+      max-width: 900px;
+      margin: 40px auto;
+      padding: 0 20px;
+    }
+    .search-box-container {
+      background: white;
+      padding: 30px;
+      border-radius: 12px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
+      border: 1px solid #e2e8f0;
+      margin-bottom: 30px;
+    }
+    .search-input-group {
+      display: flex;
+      gap: 12px;
+    }
+    .search-input-field {
+      flex: 1;
+      padding: 12px 16px;
+      font-size: 15px;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      outline: none;
+    }
+    .search-input-field:focus {
+      border-color: #2563eb;
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+    }
+    .btn-search-exec {
+      background: #2563eb;
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 8px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .btn-search-exec:hover {
+      background: #1d4ed8;
+    }
+    .tag-cloud {
+      display: flex;
+      gap: 8px;
+      margin-top: 14px;
+      flex-wrap: wrap;
+    }
+    .tag-btn {
+      background: #f1f5f9;
+      border: 1px solid #e2e8f0;
+      color: #475569;
+      padding: 6px 12px;
+      border-radius: 9999px;
+      font-size: 12px;
+      cursor: pointer;
+    }
+    .tag-btn:hover {
+      background: #e2e8f0;
+    }
+  </style>
+</head>
+<body>
+  <header class="header">
+    <div class="header-inner">
+      <a href="index.html" class="logo">🛡️ PrivAI Demo Hub</a>
+      <nav class="nav">
+        <a href="index.html" class="nav-link">Overview</a>
+        <a href="register.html" class="nav-link">Page 1: Registration</a>
+        <a href="search.html" class="nav-link active">Page 2: Search</a>
+        <a href="visual.html" class="nav-link">Page 3: Visual Perception</a>
+        <a href="http://localhost:3000" class="nav-link" target="_blank">Dashboard ↗</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="main" style="display: block;">
+    <div class="search-wrapper">
+      <div class="search-box-container">
+        <h1 style="font-size: 22px; color: #0f172a; margin-bottom: 8px;">Cloud Documentation Search</h1>
+        <p style="color: #64748b; font-size: 14px; margin-bottom: 20px;">
+          Scenario 2: Test autonomous navigation, query typing, and result card selection.
+        </p>
+
+        <div class="search-input-group">
+          <input type="search" id="search-input" class="search-input-field" placeholder="Search for Kubernetes HPA, Docker, or Pod Autoscaling..." value="" />
+          <button id="search-button" class="btn-search-exec" onclick="triggerSearch()">🔍 Search</button>
+        </div>
+
+        <div class="tag-cloud">
+          <span style="font-size: 12px; color: #64748b; align-self: center;">Quick Filters:</span>
+          <button class="tag-btn" onclick="setQuery('Kubernetes HPA')">Kubernetes HPA</button>
+          <button class="tag-btn" onclick="setQuery('Docker Compose')">Docker Compose</button>
+          <button class="tag-btn" onclick="setQuery('Horizontal Pod Autoscaler')">Horizontal Pod Autoscaler</button>
+        </div>
+      </div>
+
+      <div class="results-section" id="results-container">
+        <h2>Documentation Results</h2>
+        <div class="results-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+          <a href="docs.html" class="result-card" id="result-k8s-hpa" style="display: block; background: white; padding: 20px; border-radius: 10px; border: 1px solid #e2e8f0; text-decoration: none; color: inherit;">
+            <div style="font-size: 24px; margin-bottom: 8px;">⚙️</div>
+            <h3 style="font-size: 16px; color: #0f172a; margin-bottom: 6px;">Kubernetes Horizontal Pod Autoscaling (HPA)</h3>
+            <p style="font-size: 13px; color: #64748b; line-height: 1.4;">Learn how Kubernetes automatically scales the number of Pods in a replication controller, deployment, or replica set based on CPU or memory utilization.</p>
+            <span style="font-size: 11px; color: #10b981; font-weight: 600; display: inline-block; margin-top: 10px;">kubernetes.io • Official Docs ↗</span>
+          </a>
+
+          <a href="docs.html" class="result-card" id="result-k8s-deploy" style="display: block; background: white; padding: 20px; border-radius: 10px; border: 1px solid #e2e8f0; text-decoration: none; color: inherit;">
+            <div style="font-size: 24px; margin-bottom: 8px;">🚀</div>
+            <h3 style="font-size: 16px; color: #0f172a; margin-bottom: 6px;">Kubernetes Deployments Guide</h3>
+            <p style="font-size: 13px; color: #64748b; line-height: 1.4;">A Deployment provides declarative updates for Pods and ReplicaSets. Manage rollout, rollback, and scaling of containerized workloads.</p>
+            <span style="font-size: 11px; color: #10b981; font-weight: 600; display: inline-block; margin-top: 10px;">kubernetes.io • Official Docs ↗</span>
+          </a>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    function setQuery(q) {
+      document.getElementById('search-input').value = q;
+    }
+    function triggerSearch() {
+      const q = document.getElementById('search-input').value;
+      alert('Search performed for: ' + (q || 'All topics'));
+    }
+  </script>
+  <!-- In-page PrivAI Assistant Widget -->
+  <script src="js/assistant.js"></script>
+</body>
+</html>

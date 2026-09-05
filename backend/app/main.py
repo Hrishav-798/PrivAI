@@ -6,12 +6,14 @@ Uses Ollama + VLM for reasoning over redacted content.
 Returns strict Action JSON.
 """
 
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import logging
 
 from app.routes.health import router as health_router
 from app.routes.agent import router as agent_router
+from app.routes.telemetry import router as telemetry_router
 from app.config import settings
 
 # Structured logging
@@ -21,6 +23,16 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    logger.info("PrivAI backend starting")
+    logger.info(f"Ollama URL: {settings.ollama_base_url}")
+    logger.info(f"Ollama model: {settings.ollama_model}")
+    yield
+    logger.info("PrivAI backend shutting down")
+
+
 app = FastAPI(
     title="PrivAI — Privacy Browser Agent Backend",
     description=(
@@ -29,30 +41,19 @@ app = FastAPI(
         "Raw sensitive data never reaches this server."
     ),
     version="1.0.0",
+    lifespan=lifespan,
 )
 
-# CORS for extension
+# CORS for extension and dashboard
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Extension runs from chrome-extension:// origin
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-
-@app.on_event("startup")
-async def startup_event():
-    logger.info("PrivAI backend starting")
-    logger.info(f"Ollama URL: {settings.ollama_base_url}")
-    logger.info(f"Ollama model: {settings.ollama_model}")
-
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    logger.info("PrivAI backend shutting down")
-
-
 # Register routes
 app.include_router(health_router)
 app.include_router(agent_router, prefix="/api/agent")
+app.include_router(telemetry_router, prefix="/api")

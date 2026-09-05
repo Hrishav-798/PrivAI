@@ -26,6 +26,7 @@ export interface BBox {
 }
 
 export interface DOMElement {
+  id?: string;
   element_id: string;
   tag: string;
   role: string;
@@ -34,10 +35,12 @@ export interface DOMElement {
   bbox: BBox;
   visible: boolean;
   interactive: boolean;
-  input_type?: string;
+  type?: string | null;
+  input_type?: string | null;
   autocomplete?: string;
+  placeholder?: string;
   enabled: boolean;
-  focused: boolean;
+  focused?: boolean;
 }
 
 export interface RawDOM {

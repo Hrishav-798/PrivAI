@@ -12,7 +12,56 @@ def test_health_check():
     assert response.status_code == 200
     data = response.json()
     assert data["status"] == "healthy"
-    assert data["service"] == "privai-backend"
+    assert data["backend"] is True
+    assert "ollama" in data
+    assert "model" in data
+
+    # Also test /api/health alias
+    api_resp = client.get("/api/health")
+    assert api_resp.status_code == 200
+    assert api_resp.json()["backend"] is True
+
+
+def test_telemetry_events_and_metrics():
+    # Test posting an event
+    evt_payload = {
+        "event": "unit_test_event",
+        "label": "Unit Test Label",
+        "detail": "Testing event stream",
+        "level": "info",
+    }
+    resp = client.post("/api/events", json=evt_payload)
+    assert resp.status_code == 200
+    assert resp.json()["event"] == "unit_test_event"
+
+    # Test reading events
+    events_resp = client.get("/api/events")
+    assert events_resp.status_code == 200
+    events = events_resp.json()["events"]
+    assert any(e["event"] == "unit_test_event" for e in events)
+
+    # Test reading metrics
+    metrics_resp = client.get("/api/metrics")
+    assert metrics_resp.status_code == 200
+    m_data = metrics_resp.json()
+    assert "evaluation_benchmarks" in m_data
+    assert m_data["evaluation_benchmarks"]["pii_precision_recall"]["precision_pct"] == 100.0
+
+    # Test recording execute-result
+    exec_payload = {
+        "action": {"action": "click", "target": "search_button"},
+        "success": True,
+        "metrics": {
+            "vision_ms": 15.0,
+            "redaction_ms": 4.0,
+            "network_ms": 10.0,
+            "vlm_ms": 50.0,
+            "execution_ms": 5.0,
+            "total_ms": 84.0,
+        },
+    }
+    exec_resp = client.post("/api/agent/execute-result", json=exec_payload)
+    assert exec_resp.status_code == 200
 
 
 def test_plan_with_sanitized_context():

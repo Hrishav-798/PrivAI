@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PrivAI Demo — User Registration Form</title>
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    .form-container {
+      max-width: 600px;
+      margin: 40px auto;
+      background: white;
+      padding: 36px;
+      border-radius: 12px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+      border: 1px solid #e2e8f0;
+    }
+    .form-header {
+      text-align: center;
+      margin-bottom: 28px;
+    }
+    .form-header h1 {
+      font-size: 24px;
+      color: #0f172a;
+      margin-bottom: 8px;
+    }
+    .form-header p {
+      color: #64748b;
+      font-size: 14px;
+    }
+    .form-group {
+      margin-bottom: 20px;
+    }
+    .form-group label {
+      display: block;
+      font-size: 14px;
+      font-weight: 600;
+      color: #334155;
+      margin-bottom: 6px;
+    }
+    .form-control {
+      width: 100%;
+      padding: 10px 14px;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      font-size: 14px;
+      transition: border-color 0.2s;
+      box-sizing: border-box;
+    }
+    .form-control:focus {
+      outline: none;
+      border-color: #10b981;
+      box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.15);
+    }
+    .btn-submit {
+      width: 100%;
+      background: #10b981;
+      color: white;
+      border: none;
+      padding: 12px;
+      border-radius: 8px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .btn-submit:hover {
+      background: #059669;
+    }
+    .success-alert {
+      display: none;
+      margin-top: 20px;
+      padding: 16px;
+      background: #ecfdf5;
+      border: 1px solid #a7f3d0;
+      border-radius: 8px;
+      color: #065f46;
+      font-size: 14px;
+    }
+    .privacy-notice {
+      margin-top: 20px;
+      padding: 12px;
+      background: #f8fafc;
+      border-radius: 8px;
+      border: 1px dashed #cbd5e1;
+      font-size: 12px;
+      color: #64748b;
+      line-height: 1.5;
+    }
+  </style>
+</head>
+<body>
+  <header class="header">
+    <div class="header-inner">
+      <a href="index.html" class="logo">🛡️ PrivAI Demo Hub</a>
+      <nav class="nav">
+        <a href="index.html" class="nav-link">Overview</a>
+        <a href="register.html" class="nav-link active">Page 1: Registration</a>
+        <a href="search.html" class="nav-link">Page 2: Search</a>
+        <a href="visual.html" class="nav-link">Page 3: Visual Perception</a>
+        <a href="http://localhost:3000" class="nav-link" target="_blank">Dashboard ↗</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="main" style="display: block;">
+    <div class="form-container">
+      <div class="form-header">
+        <h1>Create New Account</h1>
+        <p>Scenario 1: Test client-side PII detection, masking, and autonomous form completion.</p>
+      </div>
+
+      <form id="registration-form" onsubmit="handleRegistration(event)">
+        <div class="form-group">
+          <label for="reg-name">Full Name</label>
+          <input type="text" id="reg-name" name="fullname" class="form-control" placeholder="Enter your full name" autocomplete="name" required>
+        </div>
+
+        <div class="form-group">
+          <label for="reg-email">Email Address</label>
+          <input type="email" id="reg-email" name="email" class="form-control" placeholder="user@example.com" autocomplete="email" required>
+        </div>
+
+        <div class="form-group">
+          <label for="reg-phone">Phone Number</label>
+          <input type="tel" id="reg-phone" name="phone" class="form-control" placeholder="+91 9876543210" autocomplete="tel" required>
+        </div>
+
+        <div class="form-group">
+          <label for="reg-password">Password</label>
+          <input type="password" id="reg-password" name="password" class="form-control" placeholder="••••••••••••" autocomplete="new-password" required>
+        </div>
+
+        <div class="form-group">
+          <label for="reg-address">Residential Address</label>
+          <textarea id="reg-address" name="address" class="form-control" rows="3" placeholder="123 Privacy Avenue, Tech City, 560001" autocomplete="street-address"></textarea>
+        </div>
+
+        <button type="submit" id="reg-submit" class="btn-submit">Submit Registration</button>
+      </form>
+
+      <div id="success-box" class="success-alert">
+        <strong>🎉 Form Submitted Successfully!</strong>
+        <p>The PrivAI agent autonomously filled and submitted the registration form. All passwords and PII were redacted before server reasoning.</p>
+      </div>
+
+      <div class="privacy-notice">
+        <strong>🛡️ Privacy Audit Point:</strong>
+        When PrivAI scans this form, <code>input[type="password"]</code> is completely blacked out, and name/email/phone/address are scrubbed to <code>[REDACTED]</code>. The remote VLM reasons only over structured element roles without receiving your secrets.
+      </div>
+    </div>
+  </main>
+
+  <script>
+    function handleRegistration(e) {
+      e.preventDefault();
+      document.getElementById('success-box').style.display = 'block';
+    }
+  </script>
+  <!-- In-page PrivAI Assistant Widget -->
+  <script src="js/assistant.js"></script>
+</body>
+</html>

@@ -4,64 +4,98 @@ import { applyMask } from './mask';
 import { applyBlur } from './blur';
 
 /**
- * Applies redactions to a screenshot data URL and returns the sanitized data URL.
- * It uses an OffscreenCanvas if available, or a regular canvas in main thread.
+ * Converts a data URL into a CanvasImageSource (Service Worker safe via createImageBitmap)
+ */
+async function loadImageSource(dataUrl: string): Promise<{ source: CanvasImageSource; width: number; height: number }> {
+  if (typeof fetch !== 'undefined' && typeof createImageBitmap !== 'undefined') {
+    try {
+      const res = await fetch(dataUrl);
+      const blob = await res.blob();
+      const bitmap = await createImageBitmap(blob);
+      return { source: bitmap, width: bitmap.width, height: bitmap.height };
+    } catch {
+      // Fall through to Image fallback
+    }
+  }
+
+  if (typeof Image !== 'undefined') {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve({ source: img, width: img.width, height: img.height });
+      img.onerror = () => reject(new Error('Failed to load image for redaction'));
+      img.src = dataUrl;
+    });
+  }
+
+  throw new Error('Neither createImageBitmap nor Image is available in this environment');
+}
+
+/**
+ * Exports a canvas or OffscreenCanvas to a base64 PNG data URL
+ */
+async function exportCanvasToDataUrl(canvas: HTMLCanvasElement | OffscreenCanvas): Promise<string> {
+  if (typeof OffscreenCanvas !== 'undefined' && canvas instanceof OffscreenCanvas) {
+    const blob = await canvas.convertToBlob({ type: 'image/png' });
+    const buffer = await blob.arrayBuffer();
+    const bytes = new Uint8Array(buffer);
+    let binary = '';
+    const len = bytes.byteLength;
+    for (let i = 0; i < len; i++) {
+      binary += String.fromCharCode(bytes[i]);
+    }
+    return `data:image/png;base64,${btoa(binary)}`;
+  }
+
+  if (typeof HTMLCanvasElement !== 'undefined' && canvas instanceof HTMLCanvasElement) {
+    return canvas.toDataURL('image/png');
+  }
+
+  throw new Error('Unsupported canvas type for export');
+}
+
+/**
+ * Applies on-device redactions to a screenshot data URL and returns the sanitized data URL.
+ * Uses OffscreenCanvas in Service Worker / Web Workers without touching the DOM.
  */
 export async function redactScreenshot(dataUrl: string, regions: SensitiveRegion[]): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => {
-      let canvas: HTMLCanvasElement | OffscreenCanvas;
-      let ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D | null;
+  const { source, width, height } = await loadImageSource(dataUrl);
 
-      // In MV3 background scripts (service workers), we must use OffscreenCanvas.
-      if (typeof OffscreenCanvas !== 'undefined') {
-        canvas = new OffscreenCanvas(img.width, img.height);
-        ctx = canvas.getContext('2d');
-      } else {
-        canvas = document.createElement('canvas');
-        canvas.width = img.width;
-        canvas.height = img.height;
-        ctx = canvas.getContext('2d');
-      }
+  let canvas: HTMLCanvasElement | OffscreenCanvas;
+  let ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D | null;
 
-      if (!ctx) {
-        reject(new Error('Failed to get canvas context'));
-        return;
-      }
+  if (typeof OffscreenCanvas !== 'undefined') {
+    canvas = new OffscreenCanvas(width, height);
+    ctx = canvas.getContext('2d');
+  } else if (typeof document !== 'undefined') {
+    canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    ctx = canvas.getContext('2d');
+  } else {
+    throw new Error('Canvas API not available for screenshot redaction');
+  }
 
-      // Draw original image
-      ctx.drawImage(img, 0, 0);
+  if (!ctx) {
+    throw new Error('Failed to obtain 2D canvas context for redaction');
+  }
 
-      // Apply redactions
-      for (const region of regions) {
-        switch (region.redaction) {
-          case 'blackout':
-            applyBlackout(ctx as CanvasRenderingContext2D, region);
-            break;
-          case 'mask':
-            applyMask(ctx as CanvasRenderingContext2D, region);
-            break;
-          case 'blur':
-            applyBlur(ctx as CanvasRenderingContext2D, region, img);
-            break;
-        }
-      }
+  // Draw original image
+  ctx.drawImage(source, 0, 0);
 
-      // Export
-      if (typeof OffscreenCanvas !== 'undefined' && canvas instanceof OffscreenCanvas) {
-        canvas.convertToBlob({ type: 'image/png' })
-          .then(blob => {
-            const reader = new FileReader();
-            reader.onloadend = () => resolve(reader.result as string);
-            reader.readAsDataURL(blob);
-          })
-          .catch(reject);
-      } else if (canvas instanceof HTMLCanvasElement) {
-        resolve(canvas.toDataURL('image/png'));
-      }
-    };
-    img.onerror = () => reject(new Error('Failed to load image for redaction'));
-    img.src = dataUrl;
-  });
+  // Apply each sensitive region's redaction
+  for (const region of regions) {
+    switch (region.redaction) {
+      case 'blackout':
+        applyBlackout(ctx, region);
+        break;
+      case 'mask':
+        applyMask(ctx, region);
+        break;
+      case 'blur':
+        applyBlur(ctx, region, source);
+        break;
+    }
+  }
+
+  return await exportCanvasToDataUrl(canvas);
 }

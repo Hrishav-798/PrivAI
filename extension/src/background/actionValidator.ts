@@ -22,17 +22,30 @@ export function validateAction(action: Action, domElements: DOMElement[]): void 
       if (!action.target) {
         throw new ActionValidationError(`${action.action} requires a target`);
       }
-      
-      const targetEl = domElements.find(el => el.element_id === action.target);
-      if (!targetEl) {
-        throw new ActionValidationError(`Target element ${action.target} does not exist in the DOM.`);
+      if (action.action === 'type' && (action.text === undefined || action.text === null)) {
+        throw new ActionValidationError('Type action requires text parameter');
       }
+      
+      const targetQuery = action.target.toLowerCase();
+      const targetEl = domElements.find(
+        (el) =>
+          el.element_id === action.target ||
+          el.id === action.target ||
+          (el.text && el.text.trim().toLowerCase() === targetQuery) ||
+          (el.label && el.label.trim().toLowerCase() === targetQuery) ||
+          (el.placeholder && el.placeholder.trim().toLowerCase() === targetQuery)
+      );
+      if (!targetEl) {
+        throw new ActionValidationError(`Target element "${action.target}" does not exist in the DOM.`);
+      }
+      // Normalize target to canonical element_id for safe executor dispatch
+      action.target = targetEl.element_id;
+
       if (!targetEl.visible) {
-        throw new ActionValidationError(`Target element ${action.target} is not visible.`);
+        throw new ActionValidationError(`Target element "${action.target}" is not visible.`);
       }
       if (!targetEl.interactive && action.action === 'click' && targetEl.tag !== 'input' && targetEl.tag !== 'textarea') {
-        // sometimes VLMs click weird things, but strictly we could enforce interactiveness.
-        // We'll allow clicking on inputs even if not marked interactive.
+        // Allow clicking on inputs and textareas even if not marked interactive
       }
       
       if (action.action === 'type' && targetEl.input_type === 'password') {

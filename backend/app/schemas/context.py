@@ -1,7 +1,7 @@
 """PrivAI Backend — Pydantic Schemas for Sanitized Context"""
 
-from pydantic import BaseModel, Field
-from typing import Optional
+from pydantic import BaseModel, Field, model_validator
+from typing import Optional, Any
 
 
 class BBox(BaseModel):
@@ -13,18 +13,30 @@ class BBox(BaseModel):
 
 class DOMElement(BaseModel):
     element_id: str = Field(alias="id", default="")
-    role: str = ""
-    text: str = ""
-    label: str = ""
+    role: Optional[str] = ""
+    text: Optional[str] = ""
+    label: Optional[str] = ""
     tag: str = ""
     bbox: Optional[BBox] = None
     visible: bool = True
     interactive: bool = False
     input_type: Optional[str] = None
     enabled: bool = True
+    placeholder: Optional[str] = ""
 
-    class Config:
-        populate_by_name = True
+    model_config = {"populate_by_name": True}
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_aliases(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            if "element_id" in data and "id" not in data:
+                data["id"] = data["element_id"]
+            elif "id" in data and "element_id" not in data:
+                data["element_id"] = data["id"]
+            if "type" in data and not data.get("input_type"):
+                data["input_type"] = data["type"]
+        return data
 
 
 class Redaction(BaseModel):
@@ -54,5 +66,4 @@ class AgentRequest(BaseModel):
     privacy: PrivacyMetadata = PrivacyMetadata()
     sanitized_screenshot: Optional[str] = None  # base64 data URL
 
-    class Config:
-        populate_by_name = True
+    model_config = {"populate_by_name": True}

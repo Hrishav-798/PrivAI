@@ -8,31 +8,33 @@ export class SemanticDetector implements Detector {
     const sensitiveKeywords = ['address', 'credit card', 'debit card', 'cvv', 'dob', 'date of birth'];
 
     for (const el of dom.elements) {
-      const lowerLabel = el.label?.toLowerCase() || '';
-      const lowerId = el.element_id?.toLowerCase() || '';
+      const elId = el.element_id || el.id || '';
+      const lowerLabel = (el.label || '').toLowerCase();
+      const lowerId = elId.toLowerCase();
+      const lowerPlaceholder = (el.placeholder || '').toLowerCase();
 
       let isSensitive = false;
       for (const keyword of sensitiveKeywords) {
-        if (lowerLabel.includes(keyword) || lowerId.includes(keyword)) {
+        if (lowerLabel.includes(keyword) || lowerId.includes(keyword) || lowerPlaceholder.includes(keyword)) {
           isSensitive = true;
           break;
         }
       }
 
-      // Names are sometimes sensitive but can be very broad. Let's flag explicit name fields if needed, 
-      // but only if they are inputs to avoid overly masking normal text.
-      if (el.input_type === 'text' && (lowerLabel.includes('name') || lowerId.includes('name'))) {
+      // Names are sensitive in inputs:
+      const elType = el.input_type || el.type || '';
+      if (elType === 'text' && (lowerLabel.includes('name') || lowerId.includes('name') || lowerPlaceholder.includes('name'))) {
         isSensitive = true;
       }
 
       if (isSensitive) {
         regions.push({
-          id: `sem_${el.element_id}`,
-          type: 'sensitive', // Using 'sensitive' or 'name'/'address'
+          id: `sem_${elId}`,
+          type: 'sensitive',
           bbox: el.bbox,
           confidence: 0.7,
           source: 'dom',
-          redaction: 'mask' // Can also be blackout
+          redaction: 'mask'
         });
       }
     }

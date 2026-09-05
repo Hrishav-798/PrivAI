@@ -11,15 +11,17 @@ export class IdDetector implements Detector {
     const ssnRegex = /\b\d{3}-\d{2}-\d{4}\b/g;
 
     for (const el of dom.elements) {
+      const elId = el.element_id || el.id;
       const isIdLabel = 
         el.label?.toLowerCase().includes('aadhaar') ||
         el.label?.toLowerCase().includes('ssn') ||
         el.label?.toLowerCase().includes('identity') ||
-        el.element_id?.toLowerCase().includes('aadhaar');
+        el.element_id?.toLowerCase().includes('aadhaar') ||
+        el.id?.toLowerCase().includes('aadhaar');
 
       if (isIdLabel) {
         regions.push({
-          id: `id_${el.element_id}`,
+          id: `id_${elId}`,
           type: 'id',
           bbox: el.bbox,
           confidence: 0.9,
@@ -35,7 +37,7 @@ export class IdDetector implements Detector {
         const hasSsn = el.text.match(ssnRegex);
         if (hasAadhaar || hasSsn) {
           regions.push({
-            id: `id_${el.element_id}`,
+            id: `id_${elId}`,
             type: 'id',
             bbox: el.bbox,
             confidence: 0.85,

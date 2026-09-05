@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PrivAI Demo — Local Visual Perception & Face Redaction</title>
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    .visual-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 24px;
+      max-width: 1000px;
+      margin: 30px auto;
+      padding: 0 20px;
+    }
+    .profile-tile {
+      background: white;
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      padding: 24px;
+      text-align: center;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.05);
+    }
+    .profile-tile img {
+      width: 100px;
+      height: 100px;
+      border-radius: 50%;
+      border: 3px solid #e2e8f0;
+      margin-bottom: 14px;
+    }
+    .pii-badge {
+      display: inline-block;
+      background: #fef2f2;
+      color: #991b1b;
+      border: 1px solid #fecaca;
+      font-size: 12px;
+      padding: 4px 8px;
+      border-radius: 6px;
+      margin: 4px;
+      font-family: monospace;
+    }
+  </style>
+</head>
+<body>
+  <header class="header">
+    <div class="header-inner">
+      <a href="index.html" class="logo">🛡️ PrivAI Demo Hub</a>
+      <nav class="nav">
+        <a href="index.html" class="nav-link">Overview</a>
+        <a href="register.html" class="nav-link">Page 1: Registration</a>
+        <a href="search.html" class="nav-link">Page 2: Search</a>
+        <a href="visual.html" class="nav-link active">Page 3: Visual Perception</a>
+        <a href="http://localhost:3000" class="nav-link" target="_blank">Dashboard ↗</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="main" style="display: block;">
+    <div style="max-width: 1000px; margin: 30px auto 0; padding: 0 20px;">
+      <h1 style="font-size: 24px; color: #0f172a; margin-bottom: 6px;">Visual Perception & Face Redaction Benchmark</h1>
+      <p style="color: #64748b; font-size: 14px;">
+        Scenario 3: UltraFace ONNX model runs locally in Chrome via WebGPU/WASM to detect facial landmarks and apply local Gaussian blurring before screenshots leave the device.
+      </p>
+    </div>
+
+    <div class="visual-grid">
+      <div class="profile-tile">
+        <img src="assets/face-synthetic.svg" alt="Synthetic Face Avatar 1" id="avatar-1">
+        <h3 style="font-size: 16px; margin-bottom: 4px;">Alex Morgan</h3>
+        <p style="font-size: 13px; color: #64748b; margin-bottom: 12px;">Cloud Architect</p>
+        <div>
+          <div class="pii-badge">alex.m@cloud.test</div>
+          <div class="pii-badge">+91 9123456780</div>
+          <div class="pii-badge">ID: 8899 4433 2211</div>
+        </div>
+        <button class="btn" style="margin-top: 14px; width: 100%;" id="btn-view-alex" onclick="alert('View profile')">View Profile</button>
+      </div>
+
+      <div class="profile-tile">
+        <img src="assets/face-synthetic.svg" alt="Synthetic Face Avatar 2" id="avatar-2">
+        <h3 style="font-size: 16px; margin-bottom: 4px;">Dr. Priya Sharma</h3>
+        <p style="font-size: 13px; color: #64748b; margin-bottom: 12px;">Lead Security Engineer</p>
+        <div>
+          <div class="pii-badge">priya.s@security.test</div>
+          <div class="pii-badge">+91 9887766554</div>
+          <div class="pii-badge">ID: 5544 3322 1100</div>
+        </div>
+        <button class="btn" style="margin-top: 14px; width: 100%;" id="btn-view-priya" onclick="alert('View profile')">View Profile</button>
+      </div>
+
+      <div class="profile-tile">
+        <img src="assets/face-synthetic.svg" alt="Synthetic Face Avatar 3" id="avatar-3">
+        <h3 style="font-size: 16px; margin-bottom: 4px;">David Chen</h3>
+        <p style="font-size: 13px; color: #64748b; margin-bottom: 12px;">Kubernetes Administrator</p>
+        <div>
+          <div class="pii-badge">david.c@infra.test</div>
+          <div class="pii-badge">+91 9776655443</div>
+          <div class="pii-badge">ID: 9900 1122 3344</div>
+        </div>
+        <button class="btn" style="margin-top: 14px; width: 100%;" id="btn-view-david" onclick="alert('View profile')">View Profile</button>
+      </div>
+    </div>
+  </main>
+  <!-- In-page PrivAI Assistant Widget -->
+  <script src="js/assistant.js"></script>
+</body>
+</html>

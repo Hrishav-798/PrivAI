@@ -16,6 +16,8 @@ from app.schemas.context import AgentRequest
 from app.schemas.action import ActionResponse, Action, ErrorResponse
 from app.services.ollama_service import OllamaService
 from app.services.action_service import ActionService
+from app.services.event_service import event_service
+from app.services.metrics_service import metrics_service
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -59,6 +61,7 @@ def server_side_pii_check(request: AgentRequest) -> tuple[bool, str]:
 
 
 @router.post("/plan", response_model=ActionResponse)
+@router.post("/reason", response_model=ActionResponse)
 async def plan_action(request: AgentRequest):
     """Plan the next browser action based on sanitized context.
 
@@ -79,10 +82,29 @@ async def plan_action(request: AgentRequest):
     pii_ok, pii_reason = server_side_pii_check(request)
     if not pii_ok:
         logger.warning('{"event":"pii_rejected","reason":"%s"}', pii_reason)
+        metrics_service.record_leak_blocked()
+        event_service.add_event(
+            "pii_blocked",
+            "Server Defense-in-Depth Block",
+            pii_reason,
+            "error",
+        )
         raise HTTPException(
             status_code=400,
             detail=f"Privacy validation failed: {pii_reason}",
         )
+
+    # Record telemetry
+    metrics_service.record_request(
+        [r.model_dump() for r in request.redactions],
+        request.privacy.scan_ms,
+    )
+    event_service.add_event(
+        "plan_request",
+        "Sanitized Context Ingested",
+        f"{len(request.dom)} elements, {len(request.redactions)} redacted regions",
+        "info",
+    )
 
     # Build VLM prompt
     start = time.time()
@@ -91,10 +113,15 @@ async def plan_action(request: AgentRequest):
         vlm_ms = (time.time() - start) * 1000
     except Exception as e:
         logger.error('{"event":"vlm_error","error":"%s"}', str(e))
-        # Fallback: return a read_page action
+        event_service.add_event(
+            "vlm_error",
+            "VLM Inference Warning",
+            f"Falling back to DOM heuristics: {str(e)}",
+            "warning",
+        )
         return ActionResponse(
             action=Action(action="read_page"),
-            reasoning=f"VLM unavailable: {str(e)}. Returning safe fallback action.",
+            reasoning=f"VLM fallback: {str(e)}",
             confidence=0.1,
             vlm_ms=0,
         )
@@ -108,17 +135,23 @@ async def plan_action(request: AgentRequest):
             action.target or "",
             vlm_ms,
         )
+        event_service.add_event(
+            "action_planned",
+            f"VLM Planned: {action.action}",
+            f"Target: {action.target or 'none'} ({vlm_ms:.0f}ms)",
+            "info",
+        )
         return ActionResponse(
             action=action,
             reasoning=vlm_response.get("reasoning", ""),
-            confidence=vlm_response.get("confidence", 0.5),
+            confidence=float(vlm_response.get("confidence", 0.85)),
             vlm_ms=vlm_ms,
         )
     except Exception as e:
-        logger.warning('{"event":"action_parse_error","error":"%s"}', str(e))
+        logger.error('{"event":"action_parse_error","error":"%s"}', str(e))
         return ActionResponse(
             action=Action(action="read_page"),
-            reasoning=f"Failed to parse VLM action: {str(e)}",
+            reasoning=f"Action parse error: {str(e)}. Safe read_page fallback.",
             confidence=0.1,
             vlm_ms=vlm_ms,
         )

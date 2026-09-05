@@ -52,6 +52,8 @@ export function scanDOM(): PerceptionData {
   registry.reset(); 
 
   elementsToScan.forEach(el => {
+    // Ignore any internal PrivAI extension UI elements
+    if (el.closest('#privai-assistant-root') || el.closest('#privai-overlay-container')) return;
     if (!isElementVisible(el)) return;
 
     const interactive = isInteractive(el);
@@ -65,17 +67,25 @@ export function scanDOM(): PerceptionData {
       height: rect.height,
     };
 
+    const elType = getElementType(el);
+    const placeholder = el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement ? el.placeholder : undefined;
+    const autocomplete = el.getAttribute('autocomplete') || undefined;
+
     const domEl: DOMElement = {
       id,
+      element_id: id,
       tag: el.tagName.toLowerCase(),
       role: el.getAttribute('role'),
       text: getElementText(el),
       label: getElementLabel(el),
-      type: getElementType(el),
+      type: elType,
+      input_type: elType,
       bbox,
       visible: true,
       enabled: !(el as HTMLInputElement).disabled,
-      interactive
+      interactive,
+      placeholder,
+      autocomplete,
     };
 
     elements.push(domEl);

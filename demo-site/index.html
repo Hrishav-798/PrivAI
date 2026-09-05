@@ -9,16 +9,17 @@
 <body>
   <header class="header">
     <div class="header-inner">
-      <a href="index.html" class="logo">📚 DocSearch</a>
+      <a href="index.html" class="logo">🛡️ PrivAI Demo Hub</a>
       <nav class="nav">
         <a href="index.html" class="nav-link active">Home</a>
-        <a href="#" class="nav-link">Documentation</a>
-        <a href="#" class="nav-link">API Reference</a>
-        <a href="#" class="nav-link">Community</a>
+        <a href="register.html" class="nav-link">Page 1: Registration</a>
+        <a href="search.html" class="nav-link">Page 2: Search</a>
+        <a href="visual.html" class="nav-link">Page 3: Visual Perception</a>
+        <a href="http://localhost:3000" class="nav-link" target="_blank">Dashboard ↗</a>
       </nav>
       <div class="user-info">
         <img src="assets/face-synthetic.svg" alt="User Avatar" class="avatar" width="36" height="36">
-        <span class="user-name">Hrishav Demo</span>
+        <span class="user-name">Demo User</span>
       </div>
     </div>
   </header>
@@ -230,5 +231,7 @@
       if (e.key === 'Enter') performSearch();
     });
   </script>
+  <!-- In-page PrivAI Assistant Widget -->
+  <script src="js/assistant.js"></script>
 </body>
 </html>
