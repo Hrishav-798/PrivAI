@@ -131,12 +131,16 @@ function executeType(id: string, text: string) {
     el.dispatchEvent(new Event('input', { bubbles: true }));
     el.dispatchEvent(new Event('change', { bubbles: true }));
 
-    // If typing into a search input, also dispatch Enter key event to trigger search
+    // If typing into a search input, also dispatch Enter key and form/button submission
+    const nameAttr = (el.getAttribute('name') || '').toLowerCase();
+    const idAttr = (el.id || '').toLowerCase();
+    const placeholderAttr = (el.getAttribute('placeholder') || '').toLowerCase();
     const isSearchField =
       (el instanceof HTMLInputElement && el.type === 'search') ||
-      el.getAttribute('name') === 'q' ||
-      el.id.toLowerCase().includes('search') ||
-      (el.getAttribute('placeholder') || '').toLowerCase().includes('search');
+      nameAttr === 'q' ||
+      nameAttr === 'search_query' ||
+      idAttr.includes('search') ||
+      placeholderAttr.includes('search');
 
     if (isSearchField) {
       el.dispatchEvent(
@@ -148,6 +152,23 @@ function executeType(id: string, text: string) {
       el.dispatchEvent(
         new KeyboardEvent('keyup', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true })
       );
+
+      const form = el.closest('form');
+      if (form) {
+        try {
+          if (typeof form.requestSubmit === 'function') {
+            form.requestSubmit();
+          } else {
+            form.submit();
+          }
+        } catch {}
+      } else {
+        const searchBtn =
+          (document.querySelector('button#search-icon-legacy, button[aria-label="Search" i], button[type="submit"]') as HTMLElement);
+        if (searchBtn) {
+          setTimeout(() => searchBtn.click(), 100);
+        }
+      }
     }
   } else if (el instanceof HTMLElement && el.hasAttribute('contenteditable')) {
     el.textContent = text;

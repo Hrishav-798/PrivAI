@@ -65,5 +65,7 @@ class AgentRequest(BaseModel):
     redactions: list[Redaction] = Field(default_factory=list)
     privacy: PrivacyMetadata = PrivacyMetadata()
     sanitized_screenshot: Optional[str] = None  # base64 data URL
+    page_title: Optional[str] = ""
+    page_url: Optional[str] = ""
 
     model_config = {"populate_by_name": True}

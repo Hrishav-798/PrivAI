@@ -24,6 +24,8 @@ export interface DOMElement {
 
 export interface PerceptionData {
   elements: DOMElement[];
+  pageTitle?: string;
+  pageUrl?: string;
   counts: {
     interactive: number;
     buttons: number;

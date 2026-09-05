@@ -17,7 +17,25 @@ chrome.runtime.onMessage.addListener((message: any, sender, sendResponse) => {
 
   if (message.type === 'START_TASK') {
     const tabId = sender.tab?.id;
-    agent.startTask(message.payload, tabId);
+    if (tabId) {
+      agent.startTask(message.payload, tabId);
+    } else {
+      // Sent from popup: target current active browser tab
+      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+        const activeTabId = tabs[0]?.id;
+        agent.startTask(message.payload, activeTabId);
+      });
+    }
+    sendResponse({ success: true });
+    return false;
+  }
+
+  if (message.type === 'TOGGLE_IN_PAGE_WIDGET') {
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      if (tabs[0]?.id) {
+        chrome.tabs.sendMessage(tabs[0].id, { type: 'TOGGLE_WIDGET' }).catch(() => {});
+      }
+    });
     sendResponse({ success: true });
     return false;
   }

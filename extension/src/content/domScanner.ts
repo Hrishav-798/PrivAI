@@ -96,5 +96,10 @@ export function scanDOM(): PerceptionData {
     if (domEl.tag === 'a') counts.links++;
   });
 
-  return { elements, counts };
+  return {
+    elements,
+    pageTitle: document.title || '',
+    pageUrl: window.location.href || '',
+    counts,
+  };
 }

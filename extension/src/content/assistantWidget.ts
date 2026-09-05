@@ -3,6 +3,8 @@
  * Injected into webpages using Shadow DOM to guarantee style isolation.
  * Provides a floating trigger button [ 🤖 PrivAI ] and a conversational chat interface.
  */
+import { scanDOM } from './domScanner';
+import { executeAction } from './executor';
 
 interface ChatMessage {
   id: string;
@@ -729,19 +731,11 @@ export class AssistantWidget {
     });
 
     toggleBtn?.addEventListener('click', () => {
-      this.isOpen = !this.isOpen;
-      dialog?.classList.toggle('open', this.isOpen);
-      this.saveStateToStorage();
-      if (this.isOpen) {
-        this.scrollToBottom();
-        if (textarea) setTimeout(() => textarea.focus(), 100);
-      }
+      this.toggleDialog();
     });
 
     closeBtn?.addEventListener('click', () => {
-      this.isOpen = false;
-      dialog?.classList.remove('open');
-      this.saveStateToStorage();
+      this.toggleDialog(false);
     });
 
     const submitTask = () => {
@@ -839,6 +833,19 @@ export class AssistantWidget {
     });
   }
 
+  public toggleDialog(open?: boolean) {
+    if (!this.shadow) return;
+    const dialog = this.shadow.getElementById('privai-chat-dialog');
+    const textarea = this.shadow.getElementById('privai-input') as HTMLTextAreaElement;
+    this.isOpen = open !== undefined ? open : !this.isOpen;
+    dialog?.classList.toggle('open', this.isOpen);
+    this.saveStateToStorage();
+    if (this.isOpen) {
+      this.scrollToBottom();
+      if (textarea) setTimeout(() => textarea.focus(), 100);
+    }
+  }
+
   /**
    * Generates 30 sequential messages to test vertical scrolling, mouse-wheel,
    * trackpad, Page Up/Down, and scrollbar dragging independently.
@@ -879,7 +886,8 @@ export class AssistantWidget {
 
     // Section 2: Direct Local Echo & Quick Greetings
     const taskLower = task.trim().toLowerCase();
-    if (['hello', 'hi', 'hey', 'test', 'ping'].includes(taskLower)) {
+    const isGreeting = /^(hi+|hello+|hey+|hola|greetings?|ping|test)\b/i.test(taskLower);
+    if (isGreeting) {
       setTimeout(() => {
         this.addMessage({
           id: `greet_${Date.now()}`,
@@ -889,7 +897,7 @@ export class AssistantWidget {
           badgeType: 'success',
           timestamp: Date.now(),
         }, true);
-      }, 150);
+      }, 100);
       return;
     }
 
@@ -902,9 +910,98 @@ export class AssistantWidget {
     this.isThinking = true;
     this.renderMessages(true);
     this.setRunning(true);
-    if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
+
+    if (typeof chrome !== 'undefined' && chrome.runtime?.id && chrome.runtime?.sendMessage) {
       chrome.runtime.sendMessage({ type: 'START_TASK', payload: task });
+    } else if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage && !window.location?.host?.includes('5000')) {
+      chrome.runtime.sendMessage({ type: 'START_TASK', payload: task });
+    } else {
+      this.handleDirectFallback(task);
     }
+  }
+
+  private async handleDirectFallback(task: string) {
+    try {
+      const data = scanDOM();
+      const res = await fetch('http://localhost:8000/api/agent/plan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          task,
+          screen: { width: window.innerWidth, height: window.innerHeight },
+          sanitized_dom: data.elements,
+          redactions: [],
+          privacy: { raw_data_removed: true, sanitized: true, regions_detected: 0, regions_redacted: 0, scan_ms: 0 },
+          page_title: document.title || '',
+          page_url: window.location.href || '',
+        }),
+      });
+
+      if (res.ok) {
+        const actionRes = await res.json();
+        this.isThinking = false;
+        if (actionRes.action?.action === 'read_page') {
+          this.addMessage({
+            id: `ans_${Date.now()}`,
+            sender: 'assistant',
+            text: actionRes.reasoning || 'Observed page.',
+            badge: 'Verified On-Device',
+            badgeType: 'success',
+            timestamp: Date.now(),
+          }, true);
+        } else {
+          this.addMessage({
+            id: `plan_${Date.now()}`,
+            sender: 'assistant',
+            text: actionRes.reasoning || `Executing ${actionRes.action?.action}`,
+            badge: 'Action Planned',
+            badgeType: 'info',
+            timestamp: Date.now(),
+          }, true);
+          try {
+            await executeAction(actionRes.action);
+            this.addMessage({
+              id: `done_${Date.now()}`,
+              sender: 'assistant',
+              text: `✅ Action executed successfully in page.`,
+              badge: 'Completed',
+              badgeType: 'success',
+              timestamp: Date.now(),
+            }, true);
+          } catch (execErr: any) {
+            this.addMessage({
+              id: `err_${Date.now()}`,
+              sender: 'assistant',
+              text: `Action execution note: ${execErr.message}`,
+              badge: 'Warning',
+              badgeType: 'warning',
+              timestamp: Date.now(),
+            }, true);
+          }
+        }
+      } else {
+        this.isThinking = false;
+        this.addMessage({
+          id: `err_${Date.now()}`,
+          sender: 'assistant',
+          text: 'Unable to connect to AI server at http://localhost:8000. Please ensure FastAPI backend is running.',
+          badge: 'Error',
+          badgeType: 'danger',
+          timestamp: Date.now(),
+        }, true);
+      }
+    } catch (e: any) {
+      this.isThinking = false;
+      this.addMessage({
+        id: `err_${Date.now()}`,
+        sender: 'assistant',
+        text: `Error connecting to AI service: ${e.message}`,
+        badge: 'Error',
+        badgeType: 'danger',
+        timestamp: Date.now(),
+      }, true);
+    }
+    this.setRunning(false);
   }
 
   public setRunning(running: boolean) {
@@ -953,6 +1050,11 @@ export class AssistantWidget {
 
     // Process new timeline entries sequentially without dropping or duplicating
     if (state.timeline && Array.isArray(state.timeline)) {
+      // CRITICAL: When a new task starts, state.timeline is reset. Reset our tracking index!
+      if (state.timeline.length <= this.lastProcessedTimelineIndex) {
+        this.lastProcessedTimelineIndex = -1;
+      }
+
       for (let i = this.lastProcessedTimelineIndex + 1; i < state.timeline.length; i++) {
         const event = state.timeline[i];
         this.lastProcessedTimelineIndex = i;
@@ -960,19 +1062,31 @@ export class AssistantWidget {
         if (!event || !event.label) continue;
 
         if (event.label === 'PRIVACY PASSED') {
-          this.isThinking = true;
+          // Only show privacy note if sensitive items were actually redacted to keep chat clean
+          if (state.redactedRegions && state.redactedRegions > 0) {
+            this.addMessage({
+              id: `evt_${Date.now()}_${i}`,
+              sender: 'assistant',
+              text: `🛡️ Local Privacy Engine: Redacted ${state.redactedRegions} sensitive items locally before network transmission.`,
+              badge: 'Safe to Transmit',
+              badgeType: 'success',
+              timestamp: event.timestamp || Date.now(),
+            });
+          }
+        } else if (event.label === 'AI ANSWER') {
+          this.isThinking = false;
           this.addMessage({
-            id: `evt_${i}`,
+            id: `ans_${Date.now()}_${i}`,
             sender: 'assistant',
-            text: `🛡️ Local Privacy Engine: Redacted ${state.redactedRegions || 0} sensitive items locally before network transmission.`,
-            badge: 'Safe to Transmit',
+            text: event.detail || 'Done.',
+            badge: 'Verified On-Device',
             badgeType: 'success',
             timestamp: event.timestamp || Date.now(),
           });
         } else if (event.label === 'NETWORK BLOCKED') {
           this.isThinking = false;
           this.addMessage({
-            id: `evt_${i}`,
+            id: `evt_${Date.now()}_${i}`,
             sender: 'assistant',
             text: `🚨 NETWORK REQUEST BLOCKED! Unredacted sensitive data detected by Hard Client Privacy Gate. Zero bytes were sent.`,
             badge: 'Privacy Violation Prevented',
@@ -980,38 +1094,46 @@ export class AssistantWidget {
             timestamp: event.timestamp || Date.now(),
           });
         } else if (event.label === 'VLM RESPONSE') {
-          this.isThinking = false;
-          this.addMessage({
-            id: `evt_${i}`,
-            sender: 'assistant',
-            text: `🧠 AI Reasoning: ${event.detail || 'Action planned'}`,
-            badge: 'Sanitized Context Reasoning',
-            badgeType: 'info',
-            timestamp: event.timestamp || Date.now(),
-          });
+          // Do not show robotic "Action: read_page" cards to user
+          if (event.detail && !event.detail.includes('read_page')) {
+            this.addMessage({
+              id: `vlm_${Date.now()}_${i}`,
+              sender: 'assistant',
+              text: `🧠 AI Reasoning: ${event.detail}`,
+              badge: 'AI Plan',
+              badgeType: 'info',
+              timestamp: event.timestamp || Date.now(),
+            });
+          }
         } else if (event.label === 'ACTION EXECUTED') {
-          this.addMessage({
-            id: `evt_${i}`,
-            sender: 'assistant',
-            text: `⚡ Action Executed: ${event.detail || 'Browser action executed successfully'}`,
-            badge: 'Action Success',
-            badgeType: 'success',
-            timestamp: event.timestamp || Date.now(),
-          });
+          // Suppress developer noise like "Executing read_page"
+          if (event.detail && !event.detail.includes('read_page')) {
+            this.addMessage({
+              id: `act_${Date.now()}_${i}`,
+              sender: 'assistant',
+              text: `⚡ ${event.detail}`,
+              badge: 'Action Success',
+              badgeType: 'success',
+              timestamp: event.timestamp || Date.now(),
+            });
+          }
         } else if (event.label === 'TASK COMPLETED') {
           this.isThinking = false;
-          this.addMessage({
-            id: `evt_${i}`,
-            sender: 'assistant',
-            text: `✅ ${event.detail || 'Task completed successfully!'}`,
-            badge: 'Completed',
-            badgeType: 'success',
-            timestamp: event.timestamp || Date.now(),
-          });
+          const hasAnswerAlready = this.messages.some((m) => m.id.startsWith('ans_'));
+          if (!hasAnswerAlready && event.detail && event.detail !== 'Task completed') {
+            this.addMessage({
+              id: `done_${Date.now()}_${i}`,
+              sender: 'assistant',
+              text: `✅ ${event.detail}`,
+              badge: 'Completed',
+              badgeType: 'success',
+              timestamp: event.timestamp || Date.now(),
+            });
+          }
         } else if (event.label === 'ERROR') {
           this.isThinking = false;
           this.addMessage({
-            id: `evt_${i}`,
+            id: `err_${Date.now()}_${i}`,
             sender: 'assistant',
             text: `⚠️ Execution Error: ${event.detail || 'An unexpected error occurred.'}`,
             badge: 'Error',

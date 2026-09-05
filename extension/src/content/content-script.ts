@@ -22,6 +22,11 @@ if (document.readyState === 'loading') {
 
 // Listen for messages from background service worker
 chrome.runtime.onMessage.addListener((message: any, sender, sendResponse) => {
+  if (message.type === 'PING') {
+    sendResponse({ success: true, pong: true });
+    return false;
+  }
+
   if (message.type === 'SCAN_PAGE') {
     try {
       lastScannedData = scanDOM();
@@ -61,6 +66,16 @@ chrome.runtime.onMessage.addListener((message: any, sender, sendResponse) => {
       assistantWidget.updateState(message.payload);
     }
     sendResponse({ success: true });
+    return false;
+  }
+
+  if (message.type === 'TOGGLE_WIDGET') {
+    if (assistantWidget) {
+      assistantWidget.toggleDialog();
+      sendResponse({ success: true });
+    } else {
+      sendResponse({ success: false, error: 'Widget not initialized' });
+    }
     return false;
   }
 

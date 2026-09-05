@@ -110,8 +110,12 @@ Return ONLY a valid JSON object."""
     async def generate_action(self, request: AgentRequest) -> dict[str, Any]:
         """Send sanitized context to Ollama and get action response."""
         # Fast path for common local questions to eliminate unnecessary model latency
+        # Fast path for greetings and common local questions to eliminate model latency
         task_lower = request.task.strip().lower()
-        if any(kw in task_lower for kw in ["what is this page", "what is on this page", "summarize this page", "tell me about this page", "explain this page"]):
+        if any(kw in task_lower for kw in [
+            "hi", "hii", "hiii", "hello", "hey", "heyy", "greetings", "who are you", "what can you do",
+            "what is this page", "what is on this page", "summarize this page", "tell me about this page", "explain this page"
+        ]):
             return self._fallback_action(request)
 
         prompt = self._build_prompt(request)
@@ -158,7 +162,6 @@ Return ONLY a valid JSON object."""
         except Exception as e:
             logger.error('{"event":"ollama_error","error":"%s"}', str(e))
             return self._fallback_action(request)
-            return self._fallback_action(request)
 
     def _parse_json_response(self, content: str) -> dict[str, Any]:
         """Parse JSON from VLM response, handling various formats."""
@@ -196,23 +199,37 @@ Return ONLY a valid JSON object."""
         task_lower = request.task.strip().lower()
         interactive = [el for el in request.dom if el.interactive and el.visible]
 
+        # 0. Conversational greetings
+        if any(kw in task_lower for kw in ["hi", "hii", "hiii", "hello", "hey", "heyy", "greetings", "who are you", "what can you do"]):
+            return {
+                "action": "read_page",
+                "reasoning": "Hello! I am PrivAI, your privacy-preserving browser assistant. I can inspect pages, fill forms, search, and navigate on your behalf without leaking unredacted sensitive data. What would you like to do on this page?",
+                "confidence": 1.0,
+            }
+
         # 1. Page understanding / Question answering
         if any(kw in task_lower for kw in ["what is", "about", "explain", "who is", "help me understand", "tell me about", "summarize"]):
+            page_title = getattr(request, "page_title", "") or ""
             headings = [el.text for el in request.dom if el.tag in ["h1", "h2", "h3"] and el.text]
             forms = [el.label or getattr(el, "placeholder", "") or el.element_id for el in interactive if el.tag in ["input", "textarea", "button"]]
             links = [el.text for el in interactive if el.tag == "a" and el.text and len(el.text) > 3]
 
-            summary_parts = []
-            if headings:
-                summary_parts.append(f"Page title/heading: '{headings[0]}'")
-            if len(headings) > 1:
-                summary_parts.append(f"Key sections: {', '.join([f'\"{h}\"' for h in headings[1:4]])}")
-            if forms:
-                summary_parts.append(f"Interactive controls: {', '.join(forms[:5])}")
-            if links:
-                summary_parts.append(f"Main links: {', '.join(links[:4])}")
+            parts = []
+            if page_title:
+                parts.append(f"This page is titled '{page_title}'.")
+            elif headings:
+                parts.append(f"This page heading is '{headings[0]}'.")
+            else:
+                parts.append(f"This is a webpage with {len(interactive)} interactive controls.")
 
-            explanation = " | ".join(summary_parts) if summary_parts else f"Webpage containing {len(interactive)} interactive elements."
+            if headings and (not page_title or headings[0] not in page_title):
+                parts.append(f"Key sections: {', '.join([f'\"{h}\"' for h in headings[:4]])}.")
+            if forms:
+                parts.append(f"Available controls: {', '.join(forms[:4])}.")
+            if links:
+                parts.append(f"Main links: {', '.join(links[:3])}.")
+
+            explanation = " ".join(parts)
             return {
                 "action": "read_page",
                 "reasoning": explanation,
@@ -239,10 +256,18 @@ Return ONLY a valid JSON object."""
 
         # 3. Search functionality across any website
         if any(kw in task_lower for kw in ["find", "search", "lookup", "query"]):
-            # Extract query terms
-            ignore_words = {"find", "the", "documentation", "for", "and", "open", "official", "result", "search", "a", "an", "on", "in", "to", "page"}
-            terms = [w for w in task_lower.split() if w not in ignore_words]
-            search_query = " ".join(terms) if terms else "Privacy AI"
+            import re
+            # Extract user's search query verbatim without dropping any valid search terms
+            quote_match = re.search(r'["\']([^"\']+)["\']', request.task)
+            if quote_match:
+                search_query = quote_match.group(1).strip()
+            else:
+                pattern = r'(?:can\s+you\s+|please\s+|could\s+you\s+)?(?:search\s+(?:for\s+)?|find\s+|lookup\s+|query\s+)(.*?)(?:\s+for\s+me)?(?:\s+(?:on|in|using)\s+.*)?$'
+                cmd_match = re.search(pattern, request.task, re.IGNORECASE)
+                if cmd_match and cmd_match.group(1).strip():
+                    search_query = cmd_match.group(1).strip()
+                else:
+                    search_query = request.task.strip()
 
             # Find search box by tag, type, placeholder, label, id
             for el in interactive:

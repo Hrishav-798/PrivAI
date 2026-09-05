@@ -358,23 +358,33 @@ export class AgentLoop {
     }
     const valMs = performance.now() - valStart;
 
+    if (actionResponse.action.action === 'read_page') {
+      this.updateState({ agentState: 'COMPLETED' });
+      this.addTimelineEvent('AI ANSWER', actionResponse.reasoning || 'I observed the page and it matches your request.');
+      this.addTimelineEvent('TASK COMPLETED', 'Task completed');
+      this.postSystemEvent('task_completed', 'Task Completed', 'read_page reached');
+      return;
+    }
+
     // 7. BROWSER ACTION EXECUTION
     this.updateState({
       agentState: 'EXECUTING',
       currentAction: JSON.stringify(actionResponse.action),
     });
-    this.addTimelineEvent('ACTION EXECUTED', `Executing ${actionResponse.action.action}`);
+    const actionDesc =
+      actionResponse.action.action === 'type'
+        ? `Typing "${actionResponse.action.text || ''}"`
+        : actionResponse.action.action === 'click'
+        ? `Clicking ${actionResponse.action.target || 'element'}`
+        : actionResponse.action.action === 'scroll'
+        ? `Scrolling ${actionResponse.action.direction || 'down'}`
+        : `Executing ${actionResponse.action.action}`;
+
+    this.addTimelineEvent('ACTION EXECUTED', actionDesc);
 
     const execStart = performance.now();
     let execSuccess = true;
     let execError: string | undefined = undefined;
-
-    if (actionResponse.action.action === 'read_page') {
-      this.updateState({ agentState: 'COMPLETED' });
-      this.addTimelineEvent('TASK COMPLETED', 'Agent finished task successfully');
-      this.postSystemEvent('task_completed', 'Task Completed', 'read_page reached');
-      return;
-    }
 
     try {
       await this.executeActionInTab(actionResponse.action);
@@ -443,52 +453,120 @@ export class AgentLoop {
     return `data:image/png;base64,${btoa(binary)}`;
   }
 
-  private async getPerceptionFromTab(): Promise<any> {
+  private async resolveActiveTabId(): Promise<number> {
+    if (this.targetTabId) return this.targetTabId;
     return new Promise((resolve, reject) => {
-      const sendToTab = (tabId: number) => {
-        chrome.tabs.sendMessage(tabId, { type: 'SCAN_PAGE' }, (response) => {
-          if (chrome.runtime.lastError) return reject(new Error(chrome.runtime.lastError.message));
-          if (!response || !response.success)
-            return reject(new Error(response?.error || 'Page DOM scan failed'));
-          resolve(response.data);
-        });
-      };
+      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+        const id = tabs[0]?.id;
+        if (!id) return reject(new Error('No active browser tab found'));
+        resolve(id);
+      });
+    });
+  }
 
-      if (this.targetTabId) {
-        sendToTab(this.targetTabId);
-      } else {
-        chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-          if (!tabs[0] || !tabs[0].id) return reject(new Error('No active browser tab found'));
-          sendToTab(tabs[0].id);
-        });
-      }
+  private async ensureContentScriptInjected(tabId: number): Promise<void> {
+    const isAlive = await new Promise<boolean>((resolve) => {
+      chrome.tabs.sendMessage(tabId, { type: 'PING' }, (res) => {
+        if (chrome.runtime.lastError || !res) {
+          resolve(false);
+        } else {
+          resolve(true);
+        }
+      });
+    });
+
+    if (isAlive) return;
+
+    try {
+      console.log(`[PrivAI] Auto-injecting content script into tab ${tabId}...`);
+      await chrome.scripting.executeScript({
+        target: { tabId },
+        files: ['content/content-script.js'],
+      });
+      await new Promise((r) => setTimeout(r, 200));
+    } catch (err: any) {
+      console.warn(`[PrivAI] Script injection note: ${err?.message}`);
+    }
+  }
+
+  private async getPerceptionFromTab(): Promise<any> {
+    const tabId = await this.resolveActiveTabId();
+    await this.ensureContentScriptInjected(tabId);
+
+    return new Promise((resolve, reject) => {
+      chrome.tabs.sendMessage(tabId, { type: 'SCAN_PAGE' }, async (response) => {
+        if (chrome.runtime.lastError) {
+          try {
+            await chrome.scripting.executeScript({
+              target: { tabId },
+              files: ['content/content-script.js'],
+            });
+            await new Promise((r) => setTimeout(r, 250));
+            chrome.tabs.sendMessage(tabId, { type: 'SCAN_PAGE' }, (retryRes) => {
+              if (chrome.runtime.lastError || !retryRes || !retryRes.success) {
+                return reject(
+                  new Error(
+                    `Could not connect to this page. Please refresh this tab (F5) once so Chrome attaches the extension.`
+                  )
+                );
+              }
+              resolve(retryRes.data);
+            });
+          } catch (e: any) {
+            return reject(
+              new Error(
+                `Could not connect to this page. Please refresh this tab (F5) once so Chrome attaches the extension.`
+              )
+            );
+          }
+          return;
+        }
+
+        if (!response || !response.success)
+          return reject(new Error(response?.error || 'Page DOM scan failed'));
+        resolve(response.data);
+      });
     });
   }
 
   private async executeActionInTab(action: Action): Promise<void> {
-    return new Promise((resolve, reject) => {
-      const sendToTab = (tabId: number) => {
-        chrome.tabs.sendMessage(
-          tabId,
-          { type: 'EXECUTE_ACTION', payload: action },
-          (response) => {
-            if (chrome.runtime.lastError)
-              return reject(new Error(chrome.runtime.lastError.message));
-            if (!response || !response.success)
-              return reject(new Error(response?.error || 'Action execution failed'));
-            resolve();
-          }
-        );
-      };
+    const tabId = await this.resolveActiveTabId();
+    await this.ensureContentScriptInjected(tabId);
 
-      if (this.targetTabId) {
-        sendToTab(this.targetTabId);
-      } else {
-        chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-          if (!tabs[0] || !tabs[0].id) return reject(new Error('No active tab'));
-          sendToTab(tabs[0].id);
-        });
-      }
+    return new Promise((resolve, reject) => {
+      chrome.tabs.sendMessage(
+        tabId,
+        { type: 'EXECUTE_ACTION', payload: action },
+        async (response) => {
+          if (chrome.runtime.lastError) {
+            try {
+              await chrome.scripting.executeScript({
+                target: { tabId },
+                files: ['content/content-script.js'],
+              });
+              await new Promise((r) => setTimeout(r, 250));
+              chrome.tabs.sendMessage(
+                tabId,
+                { type: 'EXECUTE_ACTION', payload: action },
+                (retryRes) => {
+                  if (chrome.runtime.lastError || !retryRes || !retryRes.success) {
+                    return reject(
+                      new Error(retryRes?.error || chrome.runtime.lastError?.message || 'Action execution failed')
+                    );
+                  }
+                  resolve();
+                }
+              );
+            } catch (e: any) {
+              return reject(new Error(chrome.runtime.lastError.message || e.message));
+            }
+            return;
+          }
+          if (!response || !response.success)
+            return reject(new Error(response?.error || 'Action execution failed'));
+          resolve();
+        }
+      );
     });
   }
 
@@ -506,6 +584,8 @@ export class AgentLoop {
       redactions: sanitized.redactions,
       privacy: sanitized.privacy,
       sanitized_screenshot: screenshotBase64,
+      page_title: (sanitized.dom as any)?.pageTitle || '',
+      page_url: (sanitized.dom as any)?.pageUrl || '',
     };
 
     const res = await fetch(`${this.backendBaseUrl}/api/agent/plan`, {
