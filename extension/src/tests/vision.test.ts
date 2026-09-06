@@ -49,7 +49,9 @@ describe('Local Vision Pipeline Integration Tests', () => {
       if (typeof url === 'string' && !url.startsWith('chrome-extension://') && !url.startsWith('data:')) {
         throw new Error(`Network isolation violation: Attempted to fetch external URL ${url}`);
       }
-      return Promise.resolve(new Response(new Blob())); // Mock successful local fetch
+      return Promise.resolve({
+        blob: () => Promise.resolve(new Blob()),
+      } as unknown as Response); // Mock successful local fetch — avoids jsdom Response(Blob) incompatibility
     });
     
     // Mock navigator and chrome
