@@ -7,12 +7,22 @@ from typing import Literal, Optional
 class Action(BaseModel):
     """Strict action schema. Only these actions can be returned to the browser."""
 
-    action: Literal["click", "type", "scroll", "navigate", "go_back", "read_page", "wait"]
+    action: Literal[
+        "click", "type", "scroll", "navigate", "go_back", "read_page", "wait",
+        "select", "check", "uncheck", "extract", "scroll_to_element",
+        "scroll_to_top", "scroll_to_bottom", "press_key", "wait_for_element",
+        "finish", "ask_user"
+    ]
     target: Optional[str] = None
     text: Optional[str] = None
     direction: Optional[Literal["up", "down", "left", "right"]] = None
     amount: Optional[int] = None
     url: Optional[str] = None
+    value: Optional[str] = None  # For select actions
+    key: Optional[str] = None  # For press_key action
+    question: Optional[str] = None  # For ask_user action
+    selector: Optional[str] = None  # For extract action
+    answer: Optional[str] = None  # For finish action
 
     @field_validator("amount")
     @classmethod

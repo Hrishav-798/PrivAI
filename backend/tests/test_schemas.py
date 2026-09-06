@@ -78,3 +78,48 @@ def test_wait_action():
 def test_read_page_action():
     action = Action(action="read_page")
     assert action.action == "read_page"
+
+
+def test_select_action():
+    action = Action(action="select", target="agent-select-0", value="US")
+    assert action.action == "select"
+    assert action.value == "US"
+
+
+def test_check_and_uncheck_actions():
+    check_act = Action(action="check", target="agent-checkbox-0")
+    assert check_act.action == "check"
+    uncheck_act = Action(action="uncheck", target="agent-checkbox-0")
+    assert uncheck_act.action == "uncheck"
+
+
+def test_extended_scroll_actions():
+    top = Action(action="scroll_to_top")
+    assert top.action == "scroll_to_top"
+    bottom = Action(action="scroll_to_bottom")
+    assert bottom.action == "scroll_to_bottom"
+    to_el = Action(action="scroll_to_element", target="agent-btn-5")
+    assert to_el.action == "scroll_to_element"
+    assert to_el.target == "agent-btn-5"
+
+
+def test_keyboard_actions():
+    press = Action(action="press_key", key="Enter")
+    assert press.action == "press_key"
+    assert press.key == "Enter"
+    wait_el = Action(action="wait_for_element", target="agent-btn-0")
+    assert wait_el.action == "wait_for_element"
+    assert wait_el.target == "agent-btn-0"
+
+
+def test_extract_finish_ask_user():
+    extract = Action(action="extract", target="agent-text-1")
+    assert extract.action == "extract"
+    finish = Action(action="finish", answer="Task complete successfully")
+    assert finish.action == "finish"
+    assert finish.answer == "Task complete successfully"
+    ask = Action(action="ask_user", question="Do you confirm?")
+    assert ask.action == "ask_user"
+    assert ask.question == "Do you confirm?"
+
+

@@ -28,6 +28,9 @@ action_service = ActionService()
 # Defense-in-depth PII patterns (server-side secondary check)
 EMAIL_PATTERN = re.compile(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}')
 PHONE_PATTERN = re.compile(r'(?:\+?\d{1,3}[-.\s]?)?\(?\d{2,4}\)?[-.\s]?\d{3,4}[-.\s]?\d{3,4}')
+API_KEY_PATTERN = re.compile(r'\b(?:sk-[a-zA-Z0-9_-]{20,}|AKIA[0-9A-Z]{16}|gh[posru]_[a-zA-Z0-9]{36,}|AIza[0-9A-Za-z\-_]{35})\b')
+CREDIT_CARD_PATTERN = re.compile(r'\b(?:\d{4}[\s-]?){3}\d{4}\b')
+PRIVATE_KEY_PATTERN = re.compile(r'-----BEGIN (?:RSA |EC |DSA |OPENSSH )?PRIVATE KEY-----')
 
 
 def server_side_pii_check(request: AgentRequest) -> tuple[bool, str]:
@@ -56,6 +59,18 @@ def server_side_pii_check(request: AgentRequest) -> tuple[bool, str]:
         # Check for password field values (should NEVER contain actual text)
         if element.input_type == "password" and el_text and el_text != "[REDACTED]":
             return False, f"Password value detected in element '{element.element_id}'"
+
+        # Check for API keys
+        if API_KEY_PATTERN.search(combined_text):
+            return False, f"API key pattern detected in element '{element.element_id}'"
+
+        # Check for credit card numbers
+        if CREDIT_CARD_PATTERN.search(combined_text):
+            return False, f"Credit card pattern detected in element '{element.element_id}'"
+
+        # Check for private keys
+        if PRIVATE_KEY_PATTERN.search(combined_text):
+            return False, f"Private key pattern detected in element '{element.element_id}'"
 
     return True, "OK"
 

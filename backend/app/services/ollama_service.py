@@ -32,18 +32,27 @@ YOUR TASK:
 Given the user's task and the current sanitized page state, determine the single best next browser action.
 
 AVAILABLE ACTIONS:
-1. click - Click an element. Requires: target (element_id)
-2. type - Type text into an input. Requires: target (element_id), text (string to type)
-3. scroll - Scroll the page. Requires: direction (up/down/left/right), amount (pixels)
-4. navigate - Go to a URL. Requires: url (full URL)
-5. go_back - Go back one page
-6. read_page - Read the current page (indicates task may be done or need to observe)
-7. wait - Wait for page to load
+1. click - Click an element. Requires: target (element_id or highlight index e.g. "agent-btn-0" or "[1]")
+2. type - Type text into an input. Requires: target (element_id or "[1]"), text (string to type)
+3. scroll - Scroll the page. Requires: direction ("up"|"down"|"left"|"right"), amount (pixels, e.g. 500)
+4. scroll_to_element - Scroll an element into view. Requires: target (element_id or "[1]")
+5. scroll_to_top - Scroll to the top of the page
+6. scroll_to_bottom - Scroll to the bottom of the page
+7. navigate - Go to a URL. Requires: url (full URL starting with http:// or https://)
+8. go_back - Go back one page in history
+9. select - Choose option in dropdown. Requires: target (element_id), value (option value or text)
+10. check - Check a checkbox or radio button. Requires: target (element_id)
+11. uncheck - Uncheck a checkbox. Requires: target (element_id)
+12. press_key - Press a keyboard key. Requires: key ("enter"|"escape"|"tab"|"space"|etc.)
+13. read_page - Read and observe the page (use when answering questions or when user asks for information)
+14. wait - Wait for page content to settle
+15. finish - Signal that the task is fully completed
+16. ask_user - Ask user a clarifying question. Requires: question (string)
 
 RESPONSE FORMAT - You MUST respond with ONLY valid JSON:
 {
   "action": "click",
-  "target": "element_id_here",
+  "target": "agent-btn-0",
   "reasoning": "Brief explanation of why this action is chosen",
   "confidence": 0.85
 }
@@ -51,13 +60,13 @@ RESPONSE FORMAT - You MUST respond with ONLY valid JSON:
 For type actions:
 {
   "action": "type",
-  "target": "element_id_here",
-  "text": "text to type",
+  "target": "agent-input-1",
+  "text": "search query here",
   "reasoning": "Brief explanation",
   "confidence": 0.9
 }
 
-IMPORTANT: Return ONLY the JSON object. No markdown, no code blocks, no explanation outside the JSON."""
+IMPORTANT: Return ONLY the JSON object. No markdown formatting, no code blocks, no explanation outside the JSON."""
 
 
 class OllamaService:
@@ -68,7 +77,7 @@ class OllamaService:
         self.client = httpx.AsyncClient(timeout=10.0)
 
     def _build_prompt(self, request: AgentRequest) -> str:
-        """Build the user prompt from sanitized context with rich element descriptors."""
+        """Build the user prompt from sanitized context with full page state and step history."""
         # Prioritize inputs, buttons, and high-value interactive elements first
         sorted_elements = sorted(
             [el for el in request.dom if el.interactive and el.visible],
@@ -88,11 +97,30 @@ class OllamaService:
                 for r in request.redactions
             )
 
+        page_info = []
+        if request.page_title:
+            page_info.append(f"Title: {request.page_title}")
+        if request.page_url:
+            page_info.append(f"URL: {request.page_url}")
+        if request.page_state:
+            ps = request.page_state
+            page_info.append(f"Scroll: Y={ps.scroll_y}/{ps.total_height}px, Viewport: {ps.viewport_width}x{ps.viewport_height}")
+        page_info_str = "\n".join(page_info) if page_info else f"Screen: {request.screen.width}x{request.screen.height}"
+
+        history_section = ""
+        if request.step_history:
+            history_section = f"\n{request.step_history}\n"
+
+        tree_section = ""
+        if request.semantic_tree:
+            # Use compact semantic tree summary if available
+            tree_section = f"\nSEMANTIC TREE:\n{request.semantic_tree[:1500]}\n"
+
         prompt = f"""CURRENT TASK: {request.task}
-
-CURRENT PAGE STATE:
-Screen: {request.screen.width}x{request.screen.height}
-
+{history_section}
+CURRENT PAGE:
+{page_info_str}
+{tree_section}
 Interactive DOM Elements (Inputs & Controls):
 {dom_summary}
 

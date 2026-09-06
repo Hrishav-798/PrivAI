@@ -258,3 +258,151 @@ def test_plan_accepts_redacted_dom():
 
     response = client.post("/api/agent/plan", json=payload)
     assert response.status_code == 200
+
+
+def test_plan_rejects_unredacted_api_key():
+    """Test defense-in-depth: reject payloads with raw API key in DOM text."""
+    payload = {
+        "task": "Test task",
+        "screen": {"width": 1440, "height": 900},
+        "sanitized_dom": [
+            {
+                "id": "key_field",
+                "role": "textbox",
+                "text": "sk-proj-abc1234567890abcdef1234567890abcdef12345678",
+                "label": "API Key",
+                "tag": "input",
+                "bbox": {"x": 100, "y": 100, "width": 200, "height": 30},
+                "visible": True,
+                "interactive": True,
+                "enabled": True,
+            },
+        ],
+        "redactions": [],
+        "privacy": {
+            "raw_data_removed": True,
+            "sanitized": True,
+            "regions_detected": 0,
+            "regions_redacted": 0,
+            "scan_ms": 0,
+        },
+    }
+
+    response = client.post("/api/agent/plan", json=payload)
+    assert response.status_code == 400
+    assert "Privacy validation failed" in response.json()["detail"]
+
+
+def test_plan_rejects_unredacted_credit_card():
+    """Test defense-in-depth: reject payloads with raw credit card in DOM text."""
+    payload = {
+        "task": "Test task",
+        "screen": {"width": 1440, "height": 900},
+        "sanitized_dom": [
+            {
+                "id": "cc_field",
+                "role": "textbox",
+                "text": "4532 0151 1283 0366",
+                "label": "Card Number",
+                "tag": "input",
+                "bbox": {"x": 100, "y": 100, "width": 200, "height": 30},
+                "visible": True,
+                "interactive": True,
+                "enabled": True,
+            },
+        ],
+        "redactions": [],
+        "privacy": {
+            "raw_data_removed": True,
+            "sanitized": True,
+            "regions_detected": 0,
+            "regions_redacted": 0,
+            "scan_ms": 0,
+        },
+    }
+
+    response = client.post("/api/agent/plan", json=payload)
+    assert response.status_code == 400
+    assert "Privacy validation failed" in response.json()["detail"]
+
+
+def test_plan_rejects_unredacted_private_key():
+    """Test defense-in-depth: reject payloads with private key marker in DOM text."""
+    payload = {
+        "task": "Test task",
+        "screen": {"width": 1440, "height": 900},
+        "sanitized_dom": [
+            {
+                "id": "key_area",
+                "role": "textbox",
+                "text": "-----BEGIN RSA PRIVATE KEY-----",
+                "label": "Private Key",
+                "tag": "textarea",
+                "bbox": {"x": 100, "y": 100, "width": 200, "height": 30},
+                "visible": True,
+                "interactive": True,
+                "enabled": True,
+            },
+        ],
+        "redactions": [],
+        "privacy": {
+            "raw_data_removed": True,
+            "sanitized": True,
+            "regions_detected": 0,
+            "regions_redacted": 0,
+            "scan_ms": 0,
+        },
+    }
+
+    response = client.post("/api/agent/plan", json=payload)
+    assert response.status_code == 400
+    assert "Privacy validation failed" in response.json()["detail"]
+
+
+def test_plan_with_page_state_and_history():
+    """Test accepting full page state and step history."""
+    payload = {
+        "task": "Navigate and click button",
+        "screen": {"width": 1440, "height": 900},
+        "page_state": {
+            "url": "https://example.com/docs",
+            "title": "Documentation Example",
+            "scroll_position": {"x": 0, "y": 300},
+            "viewport_size": {"width": 1440, "height": 900},
+            "is_ready": True,
+        },
+        "step_history": [
+            {
+                "step": 1,
+                "action": {"action": "navigate", "url": "https://example.com/docs"},
+                "result": "Navigation succeeded",
+            }
+        ],
+        "sanitized_dom": [
+            {
+                "id": "agent-btn-0",
+                "role": "button",
+                "text": "Get Started",
+                "label": "Get Started",
+                "tag": "button",
+                "bbox": {"x": 100, "y": 200, "width": 120, "height": 40},
+                "visible": True,
+                "interactive": True,
+                "enabled": True,
+            }
+        ],
+        "redactions": [],
+        "privacy": {
+            "raw_data_removed": True,
+            "sanitized": True,
+            "regions_detected": 0,
+            "regions_redacted": 0,
+            "scan_ms": 2,
+        },
+    }
+
+    response = client.post("/api/agent/plan", json=payload)
+    assert response.status_code == 200
+    data = response.json()
+    assert "action" in data
+
