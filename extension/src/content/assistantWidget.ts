@@ -911,97 +911,20 @@ export class AssistantWidget {
     this.renderMessages(true);
     this.setRunning(true);
 
-    if (typeof chrome !== 'undefined' && chrome.runtime?.id && chrome.runtime?.sendMessage) {
-      chrome.runtime.sendMessage({ type: 'START_TASK', payload: task });
-    } else if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage && !window.location?.host?.includes('5000')) {
+    if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
       chrome.runtime.sendMessage({ type: 'START_TASK', payload: task });
     } else {
-      this.handleDirectFallback(task);
-    }
-  }
-
-  private async handleDirectFallback(task: string) {
-    try {
-      const data = scanDOM();
-      const res = await fetch('http://localhost:8000/api/agent/plan', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          task,
-          screen: { width: window.innerWidth, height: window.innerHeight },
-          sanitized_dom: data.elements,
-          redactions: [],
-          privacy: { raw_data_removed: true, sanitized: true, regions_detected: 0, regions_redacted: 0, scan_ms: 0 },
-          page_title: document.title || '',
-          page_url: window.location.href || '',
-        }),
-      });
-
-      if (res.ok) {
-        const actionRes = await res.json();
-        this.isThinking = false;
-        if (actionRes.action?.action === 'read_page') {
-          this.addMessage({
-            id: `ans_${Date.now()}`,
-            sender: 'assistant',
-            text: actionRes.reasoning || 'Observed page.',
-            badge: 'Verified On-Device',
-            badgeType: 'success',
-            timestamp: Date.now(),
-          }, true);
-        } else {
-          this.addMessage({
-            id: `plan_${Date.now()}`,
-            sender: 'assistant',
-            text: actionRes.reasoning || `Executing ${actionRes.action?.action}`,
-            badge: 'Action Planned',
-            badgeType: 'info',
-            timestamp: Date.now(),
-          }, true);
-          try {
-            await executeAction(actionRes.action);
-            this.addMessage({
-              id: `done_${Date.now()}`,
-              sender: 'assistant',
-              text: `✅ Action executed successfully in page.`,
-              badge: 'Completed',
-              badgeType: 'success',
-              timestamp: Date.now(),
-            }, true);
-          } catch (execErr: any) {
-            this.addMessage({
-              id: `err_${Date.now()}`,
-              sender: 'assistant',
-              text: `Action execution note: ${execErr.message}`,
-              badge: 'Warning',
-              badgeType: 'warning',
-              timestamp: Date.now(),
-            }, true);
-          }
-        }
-      } else {
-        this.isThinking = false;
-        this.addMessage({
-          id: `err_${Date.now()}`,
-          sender: 'assistant',
-          text: 'Unable to connect to AI server at http://localhost:8000. Please ensure FastAPI backend is running.',
-          badge: 'Error',
-          badgeType: 'danger',
-          timestamp: Date.now(),
-        }, true);
-      }
-    } catch (e: any) {
       this.isThinking = false;
       this.addMessage({
         id: `err_${Date.now()}`,
         sender: 'assistant',
-        text: `Error connecting to AI service: ${e.message}`,
-        badge: 'Error',
-        badgeType: 'danger',
+        text: 'PrivAI requires the Chrome extension background service to sanitize page data locally before transmission. Direct unredacted network requests from webpage context are strictly prohibited.',
+        badge: 'Privacy Gate',
+        badgeType: 'warning',
         timestamp: Date.now(),
       }, true);
+      this.setRunning(false);
     }
-    this.setRunning(false);
   }
 
   public setRunning(running: boolean) {

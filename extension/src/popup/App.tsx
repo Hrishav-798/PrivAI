@@ -575,6 +575,48 @@ const App: React.FC = () => {
         </div>
       )}
 
+      {/* Authoritative Security Confirmation Modal for High-Risk Actions */}
+      {state?.pendingConfirmation && (
+        <div className="confirmation-overlay">
+          <div className="confirmation-card">
+            <div className="confirmation-header">
+              <span className="warning-icon">⚠️</span>
+              <div className="confirmation-title">Security Confirmation Required</div>
+              <span className="badge-pill danger">HIGH RISK</span>
+            </div>
+            <div className="confirmation-body">
+              <p className="confirmation-desc">
+                <strong>Action:</strong> {state.pendingConfirmation.description}
+              </p>
+              <p className="confirmation-reason">
+                <strong>Reason:</strong> {state.pendingConfirmation.reason}
+              </p>
+              <p className="confirmation-subtext">
+                This action may submit payment/auth data or make irreversible changes. PrivAI requires your explicit authorization before proceeding.
+              </p>
+            </div>
+            <div className="confirmation-actions">
+              <button
+                className="btn-confirm-danger"
+                onClick={() => {
+                  chrome.runtime.sendMessage({ type: 'CONFIRM_ACTION' });
+                }}
+              >
+                ✓ Approve Action
+              </button>
+              <button
+                className="btn-confirm-cancel"
+                onClick={() => {
+                  chrome.runtime.sendMessage({ type: 'DENY_ACTION' });
+                }}
+              >
+                ✕ Reject / Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Persistent Security Footer */}
       <footer className="popup-footer">
         <span>🛡️ On-Device Privacy Active</span>

@@ -26,12 +26,12 @@ export interface BBox {
 }
 
 export interface DOMElement {
-  id?: string;
+  id: string;
   element_id: string;
   tag: string;
-  role: string;
+  role: string | null;
   text: string;
-  label: string;
+  label: string | null;
   bbox: BBox;
   visible: boolean;
   interactive: boolean;
@@ -41,6 +41,40 @@ export interface DOMElement {
   placeholder?: string;
   enabled: boolean;
   focused?: boolean;
+  /** XPath selector for stable element addressing */
+  xpath?: string;
+  /** CSS selector for element targeting */
+  cssSelector?: string;
+  /** Whether element is currently within the viewport */
+  inViewport?: boolean;
+  /** Semantic role: heading, paragraph, navigation, form, table, list, etc. */
+  semanticRole?: string;
+  /** Highlight index for LLM-friendly numbered references (e.g., [1], [2]) */
+  highlightIndex?: number;
+  /** href for links */
+  href?: string;
+  /** alt text for images */
+  alt?: string;
+  /** checked state for checkboxes/radio */
+  checked?: boolean;
+  /** selected value for select elements */
+  selectedValue?: string;
+  /** child text nodes count (for semantic grouping) */
+  childCount?: number;
+}
+
+export interface PageState {
+  url: string;
+  title: string;
+  scrollY: number;
+  scrollX: number;
+  viewportWidth: number;
+  viewportHeight: number;
+  totalHeight: number;
+  totalWidth: number;
+  readyState: string;
+  /** Whether the page is still loading/mutating */
+  isStable: boolean;
 }
 
 export interface RawDOM {
@@ -49,6 +83,10 @@ export interface RawDOM {
   url: string;
   title: string;
   timestamp: number;
+  /** Page state metadata */
+  pageState?: PageState;
+  /** Compact semantic page representation for LLM */
+  semanticTree?: string;
 }
 
 export interface SanitizedDOM {
@@ -57,6 +95,10 @@ export interface SanitizedDOM {
   url: string;
   title: string;
   timestamp: number;
+  /** Page state metadata (safe — no PII) */
+  pageState?: PageState;
+  /** Compact semantic page representation for LLM (sanitized) */
+  semanticTree?: string;
 }
 
 // ---- Vision Types ----
@@ -86,7 +128,10 @@ export type SensitiveType =
   | 'address'
   | 'id'
   | 'face'
-  | 'sensitive';
+  | 'sensitive'
+  | 'api_key'
+  | 'credit_card'
+  | 'secret';
 
 export type DetectionSource = 'dom' | 'regex' | 'vision' | 'ner';
 
@@ -145,7 +190,18 @@ export type ActionType =
   | 'navigate'
   | 'go_back'
   | 'read_page'
-  | 'wait';
+  | 'wait'
+  | 'select'
+  | 'check'
+  | 'uncheck'
+  | 'extract'
+  | 'scroll_to_element'
+  | 'scroll_to_top'
+  | 'scroll_to_bottom'
+  | 'press_key'
+  | 'wait_for_element'
+  | 'finish'
+  | 'ask_user';
 
 export interface Action {
   action: ActionType;
@@ -154,6 +210,16 @@ export interface Action {
   direction?: 'up' | 'down' | 'left' | 'right';
   amount?: number;
   url?: string;
+  /** Value for select actions */
+  value?: string;
+  /** Key name for press_key action */
+  key?: string;
+  /** Question to ask user (ask_user action) */
+  question?: string;
+  /** Selector to extract data from (extract action) */
+  selector?: string;
+  /** Final answer or summary for finish action */
+  answer?: string;
 }
 
 export interface ActionResponse {
@@ -169,6 +235,18 @@ export interface ActionResult {
   duration_ms: number;
 }
 
+// ---- Action Risk Classification ----
+
+export type ActionRiskLevel = 'low' | 'medium' | 'high';
+
+export interface ConfirmationRequest {
+  action: Action;
+  riskLevel: ActionRiskLevel;
+  reason: string;
+  /** Formatted description for the user */
+  description: string;
+}
+
 // ---- Agent State ----
 
 export type AgentState =
@@ -180,8 +258,11 @@ export type AgentState =
   | 'PRIVACY_VALIDATING'
   | 'SENDING'
   | 'REASONING'
+  | 'PLANNING'
+  | 'VALIDATING'
   | 'ACTION_VALIDATING'
   | 'EXECUTING'
+  | 'WAITING_CONFIRMATION'
   | 'COMPLETED'
   | 'ERROR'
   | 'NETWORK_BLOCKED';
@@ -224,11 +305,29 @@ export type MessageType =
   | 'STATE_UPDATE'
   | 'METRICS_UPDATE'
   | 'PRIVACY_EVENT'
-  | 'AGENT_STEP_RESULT';
+  | 'AGENT_STEP_RESULT'
+  | 'CONFIRM_ACTION'
+  | 'DENY_ACTION'
+  | 'SCAN_PAGE'
+  | 'READ_PAGE';
 
 export interface ExtensionMessage {
   type: MessageType;
   payload?: unknown;
+}
+
+// ---- Step History (for multi-step agent context) ----
+
+export interface StepHistoryEntry {
+  stepIndex: number;
+  action: Action;
+  success: boolean;
+  error?: string;
+  /** Page URL after the action */
+  pageUrl?: string;
+  /** Brief observation after the action */
+  observation?: string;
+  timestamp: number;
 }
 
 // ---- Dashboard State ----
@@ -250,6 +349,14 @@ export interface DashboardState {
   privacyLog: PrivacyEvent[];
   timeline: TimelineEntry[];
   lastVisionDetections?: any[];
+  /** Pending confirmation request for high-risk actions */
+  pendingConfirmation?: ConfirmationRequest;
+  /** Step history for multi-step reasoning */
+  stepHistory?: StepHistoryEntry[];
+  /** Current step number */
+  currentStep?: number;
+  /** User-friendly status message with emoji */
+  statusMessage?: string;
 }
 
 export interface TimelineEntry {

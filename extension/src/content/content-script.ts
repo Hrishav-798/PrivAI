@@ -1,10 +1,11 @@
-import { MessageType, PerceptionData } from '../types/common';
 import { scanDOM } from './domScanner';
+import { readPage, getPageSummary } from './pageReader';
 import { toggleOverlay } from './overlay';
 import { executeAction } from './executor';
 import { AssistantWidget } from './assistantWidget';
+import { startObserving, waitForDOMStable } from './mutationObserver';
 
-let lastScannedData: PerceptionData | null = null;
+let lastScannedData: ReturnType<typeof scanDOM> | null = null;
 let assistantWidget: AssistantWidget | null = null;
 
 // Initialize in-page assistant widget
@@ -12,6 +13,8 @@ function initAssistant() {
   if (!assistantWidget && document.body) {
     assistantWidget = new AssistantWidget();
   }
+  // Start observing DOM mutations for dynamic content awareness
+  startObserving();
 }
 
 if (document.readyState === 'loading') {
@@ -35,6 +38,23 @@ chrome.runtime.onMessage.addListener((message: any, sender, sendResponse) => {
       sendResponse({ success: false, error: error.message });
     }
     return false;
+  }
+
+  if (message.type === 'READ_PAGE') {
+    try {
+      const result = readPage();
+      sendResponse({ success: true, data: result });
+    } catch (error: any) {
+      sendResponse({ success: false, error: error.message });
+    }
+    return false;
+  }
+
+  if (message.type === 'WAIT_FOR_STABLE') {
+    waitForDOMStable(300, 3000)
+      .then((stable) => sendResponse({ success: true, data: { stable } }))
+      .catch((err) => sendResponse({ success: false, error: err.message }));
+    return true; // async response
   }
 
   if (message.type === 'TOGGLE_OVERLAY') {

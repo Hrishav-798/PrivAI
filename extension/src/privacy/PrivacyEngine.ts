@@ -5,6 +5,9 @@ import { PhoneDetector } from './detectors/phoneDetector';
 import { IdDetector } from './detectors/idDetector';
 import { SemanticDetector } from './detectors/semanticDetector';
 import { FaceDetector } from './detectors/faceDetector';
+import { ApiKeyDetector } from './detectors/apiKeyDetector';
+import { CreditCardDetector } from './detectors/creditCardDetector';
+import { SecretDetector } from './detectors/secretDetector';
 import { redactScreenshot } from './redaction';
 import { sanitizeDOM } from './redaction/domSanitizer';
 import { assertSafeToTransmit } from './validation/privacyValidator';
@@ -20,6 +23,9 @@ export class PrivacyEngine {
       new PhoneDetector(),
       new IdDetector(),
       new SemanticDetector(),
+      new ApiKeyDetector(),
+      new CreditCardDetector(),
+      new SecretDetector(),
       // Note: Face detection is supplied via visionRegions (LocalVisionModel / UltraFace ONNX),
       // not through DOM text scanners.
     ];

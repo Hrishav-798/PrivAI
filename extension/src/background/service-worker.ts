@@ -1,4 +1,3 @@
-import { MessageType } from '../types/common';
 import { AgentLoop } from './agentLoop';
 
 const agent = new AgentLoop();
@@ -53,6 +52,19 @@ chrome.runtime.onMessage.addListener((message: any, sender, sendResponse) => {
   
   if (message.type === 'SET_FAILURE_MODE') {
     agent.setTestFailureMode(message.payload);
+    sendResponse({ success: true });
+    return false;
+  }
+
+  // Handle user confirmation/denial of high-risk actions
+  if (message.type === 'CONFIRM_ACTION') {
+    agent.resolveConfirmation(true);
+    sendResponse({ success: true });
+    return false;
+  }
+
+  if (message.type === 'DENY_ACTION') {
+    agent.resolveConfirmation(false);
     sendResponse({ success: true });
     return false;
   }

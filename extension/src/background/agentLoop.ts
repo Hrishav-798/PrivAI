@@ -1,3 +1,12 @@
+/**
+ * PrivAI — Agent Loop
+ *
+ * Orchestrates the agent pipeline with a Planner → Navigator → Validator architecture.
+ * Maintains page state, step history for multi-step context, supports action risk
+ * classification and user confirmation, and integrates the DOM scanner with semantic
+ * page representation and client-side privacy validation.
+ */
+
 import {
   AgentState,
   DashboardState,
@@ -8,12 +17,17 @@ import {
   ActionResponse,
   Action,
   SensitiveRegion,
+  StepHistoryEntry,
+  ConfirmationRequest,
+  PageState,
 } from '../types';
 import { PrivacyEngine } from '../privacy/PrivacyEngine';
-import { validateAction } from './actionValidator';
+import { validateAction, classifyActionRisk, buildConfirmationRequest } from './actionValidator';
 import { ILocalVisionModel } from '../perception/LocalVisionModel';
 import { LocalVisionClient } from '../perception/LocalVisionClient';
 import { mergeDetections } from '../perception/detectionMerger';
+import { isGreeting, isReadOnlyTask, isTaskLikelyComplete, buildStepHistorySummary } from './agentPlanner';
+import { validateActionResult, getStatusEmoji } from './agentValidator';
 
 export class AgentLoop {
   private state: DashboardState;
@@ -23,6 +37,9 @@ export class AgentLoop {
   private testFailureMode: boolean = false;
   private targetTabId: number | null = null;
   private backendBaseUrl: string = 'http://localhost:8000';
+  private stepHistory: StepHistoryEntry[] = [];
+  private currentStep: number = 0;
+  private pendingConfirmationResolve: ((confirmed: boolean) => void) | null = null;
 
   constructor() {
     this.privacyEngine = new PrivacyEngine();
@@ -79,6 +96,8 @@ export class AgentLoop {
       metrics: null,
       privacyLog: [],
       timeline: [{ timestamp: Date.now(), label: 'Agent Initialized' }],
+      stepHistory: [],
+      currentStep: 0,
     };
   }
 
@@ -90,8 +109,22 @@ export class AgentLoop {
     return this.state;
   }
 
+  /**
+   * Handle user confirming or denying a high-risk action.
+   */
+  public resolveConfirmation(confirmed: boolean) {
+    if (this.pendingConfirmationResolve) {
+      this.pendingConfirmationResolve(confirmed);
+      this.pendingConfirmationResolve = null;
+    }
+  }
+
   private updateState(partial: Partial<DashboardState>) {
     this.state = { ...this.state, ...partial };
+    // Add status message emoji
+    if (partial.agentState) {
+      this.state.statusMessage = getStatusEmoji(partial.agentState);
+    }
     this.broadcastState();
   }
 
@@ -139,17 +172,24 @@ export class AgentLoop {
 
   public stop() {
     this.isRunning = false;
-    this.updateState({ agentState: 'IDLE' });
+    this.updateState({ agentState: 'IDLE', pendingConfirmation: undefined });
     this.addTimelineEvent('Task Stopped manually');
     this.postSystemEvent('task_stopped', 'Agent Task Stopped', 'Stopped by user');
+    // Reject any pending confirmation
+    if (this.pendingConfirmationResolve) {
+      this.pendingConfirmationResolve(false);
+      this.pendingConfirmationResolve = null;
+    }
   }
 
   public async startTask(task: string, tabId?: number) {
     if (this.isRunning) return;
     this.isRunning = true;
     this.targetTabId = tabId || null;
+    this.stepHistory = [];
+    this.currentStep = 0;
     this.state = this.getInitialState();
-    this.updateState({ task, agentState: 'CAPTURING' });
+    this.updateState({ task, agentState: 'PLANNING' });
     this.addTimelineEvent('TASK START', `Goal: ${task}`);
     this.postSystemEvent('task_start', 'Agent Task Started', task);
 
@@ -157,11 +197,10 @@ export class AgentLoop {
   }
 
   private async runLoop() {
-    let stepCount = 0;
-    const maxSteps = 10;
+    const maxSteps = 25;
 
-    while (this.isRunning && stepCount < maxSteps) {
-      stepCount++;
+    while (this.isRunning && this.currentStep < maxSteps) {
+      this.currentStep++;
       try {
         await this.step();
         if (
@@ -173,11 +212,22 @@ export class AgentLoop {
           break;
         }
 
+        // Check if task is likely complete based on history
+        if (isTaskLikelyComplete(this.state.task, this.stepHistory)) {
+          this.isRunning = false;
+          this.updateState({ agentState: 'COMPLETED' });
+          this.addTimelineEvent('TASK COMPLETED', 'Agent determined task is complete');
+          break;
+        }
+
         // Brief stabilization window after action
         await new Promise((r) => setTimeout(r, 400));
         if (this.isRunning) {
-          this.updateState({ agentState: 'CAPTURING' });
-          this.addTimelineEvent('NEXT STEP', `Starting step ${stepCount + 1}`);
+          this.updateState({
+            agentState: 'CAPTURING',
+            currentStep: this.currentStep,
+          });
+          this.addTimelineEvent('NEXT STEP', `Starting step ${this.currentStep + 1}`);
         }
       } catch (err: any) {
         console.error(err);
@@ -191,7 +241,7 @@ export class AgentLoop {
       }
     }
 
-    if (stepCount >= maxSteps && this.isRunning) {
+    if (this.currentStep >= maxSteps && this.isRunning) {
       this.isRunning = false;
       this.updateState({ agentState: 'COMPLETED' });
       this.addTimelineEvent('TASK COMPLETED', 'Reached maximum allowed steps for task');
@@ -211,7 +261,7 @@ export class AgentLoop {
     const captureMs = performance.now() - captureStart;
     this.postSystemEvent('screenshot_captured', 'Screenshot Captured', 'Local raw tab captured');
 
-    // 2. LOCAL DOM PERCEPTION
+    // 2. LOCAL DOM PERCEPTION (with full page state)
     this.updateState({ agentState: 'PERCEIVING' });
     this.addTimelineEvent('LOCAL PERCEPTION', 'Extracting structured DOM elements');
     const domStart = performance.now();
@@ -227,15 +277,21 @@ export class AgentLoop {
       input_type: el.input_type || el.type || null,
     }));
 
+    // Extract real page state from perception data
+    const pageUrl = perception.pageUrl || perception.pageState?.url || '';
+    const pageTitle = perception.pageTitle || perception.pageState?.title || '';
+
     const rawContext: RawContext = {
       __brand: 'RawContext',
       screenshot: screenshotBlob as any,
       dom: {
         __brand: 'RawDOM',
         elements: normalizedElements,
-        title: 'Tab',
-        url: 'url',
+        title: pageTitle,
+        url: pageUrl,
         timestamp: Date.now(),
+        pageState: perception.pageState,
+        semanticTree: perception.semanticTree,
       },
     };
 
@@ -277,7 +333,7 @@ export class AgentLoop {
 
     // 4. LOCAL PRIVACY ENGINE (Detect, Redact, Validate)
     this.updateState({ agentState: 'PRIVACY_SCANNING', privacyStatus: 'SCANNING' });
-    this.addTimelineEvent('PRIVACY SCANNING', 'Detecting passwords, PII, and faces');
+    this.addTimelineEvent('PRIVACY SCANNING', 'Detecting passwords, PII, API keys, cards, and secrets');
 
     const privacyStart = performance.now();
     let sanitizedContext: SanitizedContext;
@@ -354,19 +410,99 @@ export class AgentLoop {
     } catch (err: any) {
       this.addTimelineEvent('ACTION REJECTED', err.message);
       this.postSystemEvent('action_rejected', 'Action Rejected', err.message, 'warning');
+
+      // Record failed validation in history
+      this.stepHistory.push({
+        stepIndex: this.currentStep,
+        action: actionResponse.action,
+        success: false,
+        error: `Validation failed: ${err.message}`,
+        pageUrl: pageUrl,
+        timestamp: Date.now(),
+      });
+
       throw new Error(`Action validation failed: ${err.message}`);
     }
     const valMs = performance.now() - valStart;
 
-    if (actionResponse.action.action === 'read_page') {
+    // 7. RISK CLASSIFICATION & CONFIRMATION
+    const riskLevel = classifyActionRisk(actionResponse.action, sanitizedContext.dom.elements);
+    if (riskLevel === 'high') {
+      const confirmation = buildConfirmationRequest(
+        actionResponse.action, riskLevel, sanitizedContext.dom.elements
+      );
+      this.updateState({
+        agentState: 'WAITING_CONFIRMATION',
+        pendingConfirmation: confirmation,
+      });
+      this.addTimelineEvent('CONFIRMATION REQUIRED', confirmation.description);
+
+      // Wait for user to confirm or deny
+      const confirmed = await new Promise<boolean>((resolve) => {
+        this.pendingConfirmationResolve = resolve;
+        // Auto-deny after 60 seconds if no response
+        setTimeout(() => {
+          if (this.pendingConfirmationResolve === resolve) {
+            this.pendingConfirmationResolve = null;
+            resolve(false);
+          }
+        }, 60000);
+      });
+
+      this.updateState({ pendingConfirmation: undefined });
+
+      if (!confirmed) {
+        this.addTimelineEvent('ACTION DENIED', 'User denied high-risk action');
+        this.stepHistory.push({
+          stepIndex: this.currentStep,
+          action: actionResponse.action,
+          success: false,
+          error: 'Denied by user',
+          pageUrl: pageUrl,
+          timestamp: Date.now(),
+        });
+        return; // Skip execution, continue to next step
+      }
+      this.addTimelineEvent('ACTION CONFIRMED', 'User approved high-risk action');
+    }
+
+    // Handle read_page / finish actions (no browser execution needed)
+    if (actionResponse.action.action === 'read_page' || actionResponse.action.action === 'finish') {
       this.updateState({ agentState: 'COMPLETED' });
       this.addTimelineEvent('AI ANSWER', actionResponse.reasoning || 'I observed the page and it matches your request.');
       this.addTimelineEvent('TASK COMPLETED', 'Task completed');
-      this.postSystemEvent('task_completed', 'Task Completed', 'read_page reached');
+      this.postSystemEvent('task_completed', 'Task Completed', `${actionResponse.action.action} reached`);
+
+      this.stepHistory.push({
+        stepIndex: this.currentStep,
+        action: actionResponse.action,
+        success: true,
+        pageUrl: pageUrl,
+        observation: actionResponse.reasoning,
+        timestamp: Date.now(),
+      });
       return;
     }
 
-    // 7. BROWSER ACTION EXECUTION
+    // Handle ask_user action
+    if (actionResponse.action.action === 'ask_user') {
+      this.addTimelineEvent('QUESTION', actionResponse.action.question || actionResponse.reasoning || 'The agent needs your input.');
+      this.updateState({ agentState: 'COMPLETED' });
+      this.stepHistory.push({
+        stepIndex: this.currentStep,
+        action: actionResponse.action,
+        success: true,
+        pageUrl: pageUrl,
+        observation: actionResponse.action.question,
+        timestamp: Date.now(),
+      });
+      return;
+    }
+
+    // 8. BROWSER ACTION EXECUTION
+    // Capture page state before action for validation
+    const beforePageState = perception.pageState;
+
     this.updateState({
       agentState: 'EXECUTING',
       currentAction: JSON.stringify(actionResponse.action),
@@ -378,6 +514,10 @@ export class AgentLoop {
         ? `Clicking ${actionResponse.action.target || 'element'}`
         : actionResponse.action.action === 'scroll'
         ? `Scrolling ${actionResponse.action.direction || 'down'}`
+        : actionResponse.action.action === 'navigate'
+        ? `Navigating to ${actionResponse.action.url || ''}`
+        : actionResponse.action.action === 'select'
+        ? `Selecting "${actionResponse.action.value}" in ${actionResponse.action.target}`
         : `Executing ${actionResponse.action.action}`;
 
     this.addTimelineEvent('ACTION EXECUTED', actionDesc);
@@ -395,6 +535,40 @@ export class AgentLoop {
       this.addTimelineEvent('ACTION FAILED', err.message);
     }
     const execMs = performance.now() - execStart;
+
+    // 9. POST-ACTION VALIDATION
+    this.updateState({ agentState: 'VALIDATING' });
+    let afterPageState: PageState | undefined;
+    try {
+      const afterPerception = await this.getPerceptionFromTab();
+      afterPageState = afterPerception.pageState;
+    } catch {
+      // Re-observation may fail if page navigated
+    }
+
+    const validation = validateActionResult(
+      actionResponse.action,
+      beforePageState,
+      afterPageState,
+      execError,
+    );
+
+    // Record step in history
+    this.stepHistory.push({
+      stepIndex: this.currentStep,
+      action: actionResponse.action,
+      success: validation.success,
+      error: validation.error,
+      pageUrl: afterPageState?.url || pageUrl,
+      observation: validation.observation,
+      timestamp: Date.now(),
+    });
+
+    this.updateState({
+      stepHistory: this.stepHistory,
+      currentStep: this.currentStep,
+    });
+
     const totalMs = performance.now() - stepStart;
 
     // Record metrics
@@ -584,8 +758,11 @@ export class AgentLoop {
       redactions: sanitized.redactions,
       privacy: sanitized.privacy,
       sanitized_screenshot: screenshotBase64,
-      page_title: (sanitized.dom as any)?.pageTitle || '',
-      page_url: (sanitized.dom as any)?.pageUrl || '',
+      page_title: sanitized.dom.title || '',
+      page_url: sanitized.dom.url || '',
+      page_state: sanitized.dom.pageState || null,
+      semantic_tree: sanitized.dom.semanticTree || '',
+      step_history: buildStepHistorySummary(this.stepHistory),
     };
 
     const res = await fetch(`${this.backendBaseUrl}/api/agent/plan`, {
