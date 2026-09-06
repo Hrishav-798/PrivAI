@@ -89,6 +89,14 @@ chrome.runtime.onMessage.addListener((message: any, sender, sendResponse) => {
     return false;
   }
 
+  if (message.type === 'PRIVACY_GATE_BLOCKED') {
+    if (assistantWidget) {
+      assistantWidget.handlePrivacyBlocked(message.payload);
+    }
+    sendResponse({ success: true });
+    return false;
+  }
+
   if (message.type === 'TOGGLE_WIDGET') {
     if (assistantWidget) {
       assistantWidget.toggleDialog();

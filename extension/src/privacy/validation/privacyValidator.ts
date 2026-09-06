@@ -28,8 +28,8 @@ export function assertSafeToTransmit(context: SanitizedContext | RawContext): as
 
   // 2. Stateless regex patterns (no /g flag to prevent regex state drift across iterations)
   const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/i;
-  const phoneRegex = /(?:\+?91[\-\s]?)?[6789]\d{9}|\b\d{3}-\d{2}-\d{4}\b/;
-  const aadhaarRegex = /\b\d{4}\s\d{4}\s\d{4}\b/;
+  const phoneRegex = /(?:\+(?:[1-9]\d{0,2})[\s.-]?(?:\(?\d{1,4}\)?[\s.-]?)?\d{3,4}[\s.-]?\d{3,5}(?:\s*(?:ext|x|ext.)\s*\d+)?)|(?:\b\d{3}[\.\-]\d{3}[\.\-]\d{4}\b)|(?:\b\(?\d{3}\)?[\s.-]\d{3}[\s.-]\d{4}\b)|(?:\b(?:\+?91[\-\s]?)?[6789]\d{9}\b)/;
+  const nationalIdRegex = /\b\d{4}[\s\-\.]\d{4}[\s\-\.]\d{4}\b|\b\d{3}-\d{2}-\d{4}\b|\b[A-Z]{5}[0-9]{4}[A-Z]\b/;
   const apiKeyRegex = /\b(?:sk-[a-zA-Z0-9_\-]{20,}|AKIA[0-9A-Z]{16}|gh[posru]_[a-zA-Z0-9]{36,}|AIza[0-9A-Za-z\-_]{35})\b/;
   const creditCardRegex = /\b(?:\d{4}[\s-]?){3}\d{4}\b/;
   const privateKeyRegex = /-----BEGIN (?:RSA |EC |DSA |OPENSSH )?PRIVATE KEY-----/;
@@ -37,50 +37,87 @@ export function assertSafeToTransmit(context: SanitizedContext | RawContext): as
   const elements = context.dom?.elements || (context as any).sanitized_dom || [];
   for (const el of elements) {
     const elId = el.element_id || el.id || 'unknown';
-    const text = el.text ? el.text.trim() : '';
+    const fieldsToCheck = [
+      { name: 'text', val: el.text },
+      { name: 'placeholder', val: el.placeholder },
+      { name: 'label', val: el.label },
+      { name: 'alt', val: el.alt },
+      { name: 'selectedValue', val: el.selectedValue },
+    ];
 
-    if (!text || text === '[REDACTED]') {
-      continue;
-    }
-
-    // Password check
     const isPassword =
       el.input_type === 'password' ||
       el.type === 'password' ||
-      elId.toLowerCase().includes('password');
+      el.autocomplete?.includes('password') ||
+      elId.toLowerCase().includes('password') ||
+      elId.toLowerCase().includes('pin');
 
-    if (isPassword && text !== '[REDACTED]') {
-      throw new PrivacyViolationError(`HARD GATE BLOCKED: Unredacted password found in element ${elId}`);
+    for (const field of fieldsToCheck) {
+      const val = field.val ? field.val.trim() : '';
+      if (!val || val === '[REDACTED]') continue;
+
+      if (isPassword && val !== '[REDACTED]') {
+        throw new PrivacyViolationError(`HARD GATE BLOCKED: Unredacted password/credential found in element ${elId} (${field.name})`);
+      }
+
+      if (emailRegex.test(val)) {
+        throw new PrivacyViolationError(`HARD GATE BLOCKED: Unredacted email found in element ${elId} (${field.name})`);
+      }
+
+      if (phoneRegex.test(val)) {
+        throw new PrivacyViolationError(`HARD GATE BLOCKED: Unredacted phone number found in element ${elId} (${field.name})`);
+      }
+
+      if (nationalIdRegex.test(val)) {
+        throw new PrivacyViolationError(`HARD GATE BLOCKED: Unredacted national ID / PAN found in element ${elId} (${field.name})`);
+      }
+
+      if (apiKeyRegex.test(val)) {
+        throw new PrivacyViolationError(`HARD GATE BLOCKED: Unredacted API key found in element ${elId} (${field.name})`);
+      }
+
+      if (creditCardRegex.test(val)) {
+        throw new PrivacyViolationError(`HARD GATE BLOCKED: Unredacted credit card found in element ${elId} (${field.name})`);
+      }
+
+      if (privateKeyRegex.test(val)) {
+        throw new PrivacyViolationError(`HARD GATE BLOCKED: Unredacted private key found in element ${elId} (${field.name})`);
+      }
     }
+  }
 
-    // Email check
-    if (emailRegex.test(text)) {
-      throw new PrivacyViolationError(`HARD GATE BLOCKED: Unredacted email found in element ${elId}`);
+  // 3. Scan semantic tree representation if present
+  if (context.dom?.semanticTree) {
+    const tree = context.dom.semanticTree;
+    if (emailRegex.test(tree)) {
+      throw new PrivacyViolationError('HARD GATE BLOCKED: Unredacted email found in semantic tree payload.');
     }
-
-    // Phone check
-    if (phoneRegex.test(text)) {
-      throw new PrivacyViolationError(`HARD GATE BLOCKED: Unredacted phone number found in element ${elId}`);
+    if (phoneRegex.test(tree)) {
+      throw new PrivacyViolationError('HARD GATE BLOCKED: Unredacted phone number found in semantic tree payload.');
     }
-
-    // National ID check
-    if (aadhaarRegex.test(text)) {
-      throw new PrivacyViolationError(`HARD GATE BLOCKED: Unredacted national ID found in element ${elId}`);
+    if (nationalIdRegex.test(tree)) {
+      throw new PrivacyViolationError('HARD GATE BLOCKED: Unredacted national ID / PAN found in semantic tree payload.');
     }
-
-    // API Key check
-    if (apiKeyRegex.test(text)) {
-      throw new PrivacyViolationError(`HARD GATE BLOCKED: Unredacted API key found in element ${elId}`);
+    if (apiKeyRegex.test(tree)) {
+      throw new PrivacyViolationError('HARD GATE BLOCKED: Unredacted API key found in semantic tree payload.');
     }
-
-    // Credit Card check
-    if (creditCardRegex.test(text)) {
-      throw new PrivacyViolationError(`HARD GATE BLOCKED: Unredacted credit card found in element ${elId}`);
+    if (creditCardRegex.test(tree)) {
+      throw new PrivacyViolationError('HARD GATE BLOCKED: Unredacted credit card found in semantic tree payload.');
     }
+    if (privateKeyRegex.test(tree)) {
+      throw new PrivacyViolationError('HARD GATE BLOCKED: Unredacted private key found in semantic tree payload.');
+    }
+  }
 
-    // Private Key check
-    if (privateKeyRegex.test(text)) {
-      throw new PrivacyViolationError(`HARD GATE BLOCKED: Unredacted private key found in element ${elId}`);
+  // 4. Validate consolidated redaction records (DOM + Vision + OCR Text-Region)
+  if (context.redactions && Array.isArray(context.redactions)) {
+    for (const r of context.redactions) {
+      if (!r.treatment || !['blackout', 'mask', 'blur'].includes(r.treatment)) {
+        throw new PrivacyViolationError(`HARD GATE BLOCKED: Invalid or missing redaction treatment for region ${r.id || r.type}`);
+      }
+      if (!r.bbox || r.bbox.width <= 0 || r.bbox.height <= 0) {
+        throw new PrivacyViolationError(`HARD GATE BLOCKED: Invalid bounding box for sensitive region ${r.id || r.type}`);
+      }
     }
   }
 

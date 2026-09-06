@@ -354,7 +354,7 @@ describe('Real Website Integration Tests', () => {
         redactions: detectedRegions.map((r) => ({
           type: r.type,
           bbox: r.bbox,
-          treatment: r.treatment,
+          treatment: r.treatment || r.redaction || 'mask',
         })),
         privacy: {
           raw_data_removed: true,

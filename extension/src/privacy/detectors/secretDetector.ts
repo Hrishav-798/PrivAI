@@ -33,7 +33,8 @@ const SECRET_FIELD_KEYWORDS = [
   'session_id', 'session-id', 'sessionid', 'csrf_token', 'csrf-token',
   'auth_header', 'authorization', 'cookie', 'set-cookie',
   'encryption_key', 'encryption-key', 'signing_key', 'signing-key',
-  'client_secret', 'client-secret',
+  'client_secret', 'client-secret', 'auth_token', 'authtoken',
+  'access_token', 'session_token', 'token',
 ];
 
 export class SecretDetector implements Detector {

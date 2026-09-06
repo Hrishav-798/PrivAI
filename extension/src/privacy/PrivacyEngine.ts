@@ -58,6 +58,7 @@ export class PrivacyEngine {
 
     // 4. Generate Metadata (for Audit/Dashboard, without raw values)
     const redactions: RedactionMetadata[] = regions.map(r => ({
+      id: r.id,
       type: r.type,
       bbox: r.bbox,
       treatment: r.redaction

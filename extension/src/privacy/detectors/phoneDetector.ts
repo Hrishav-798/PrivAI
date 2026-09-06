@@ -4,9 +4,9 @@ import { SensitiveRegion, RawDOM } from '../../types';
 export class PhoneDetector implements Detector {
   detect(dom: RawDOM): SensitiveRegion[] {
     const regions: SensitiveRegion[] = [];
-    // Generic & Indian phone regex
-    // Matches patterns like +91 9876543210, 98765-43210, (123) 456-7890
-    const phoneRegex = /(\+?91[\-\s]?)?[6789]\d{9}|(\+\d{1,3}[\s-]?)?\(?\d{3}\)?[\s-]?\d{3}[\s-]?\d{4}/g;
+    // International phone regex supporting Indian (+91), North American (+1), European (+44, +49, etc.),
+    // dot notation (123.456.7890), extensions (ext. 101), and E.164 compact formats.
+    const phoneRegex = /(?:\+(?:[1-9]\d{0,2})[\s.-]?(?:\(?\d{1,4}\)?[\s.-]?)?\d{3,4}[\s.-]?\d{3,5}(?:\s*(?:ext|x|ext.)\s*\d+)?)|(?:\b\d{3}[\.\-]\d{3}[\.\-]\d{4}\b)|(?:\b\(?\d{3}\)?[\s.-]\d{3}[\s.-]\d{4}(?:\s*(?:ext|x|ext.)\s*\d+)?\b)|(?:\b(?:\+?91[\-\s]?)?[6789]\d{9}\b)/g;
 
     for (const el of dom.elements) {
       const elId = el.element_id || el.id;
@@ -31,9 +31,13 @@ export class PhoneDetector implements Detector {
         continue;
       }
 
-      // Check text content
-      if (el.text && typeof el.text === 'string') {
-        const matches = el.text.match(phoneRegex);
+      // Check text, placeholder, label, and alt content
+      const textSources = [el.text, el.placeholder, el.label, el.alt].filter(
+        (val): val is string => typeof val === 'string' && val.trim().length > 0
+      );
+
+      for (const str of textSources) {
+        const matches = str.match(phoneRegex);
         if (matches && matches.length > 0) {
           regions.push({
             id: `phone_${elId}`,
@@ -43,6 +47,7 @@ export class PhoneDetector implements Detector {
             source: 'regex',
             redaction: 'mask'
           });
+          break;
         }
       }
     }

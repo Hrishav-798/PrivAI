@@ -6,14 +6,25 @@ export class PasswordDetector implements Detector {
     const regions: SensitiveRegion[] = [];
     
     for (const el of dom.elements) {
+      const idLow = (el.element_id || el.id || '').toLowerCase();
+      const labelLow = (el.label || '').toLowerCase();
+      const placeholderLow = (el.placeholder || '').toLowerCase();
+      const autocompleteLow = (el.autocomplete || '').toLowerCase();
+
       const isPassword = 
         el.input_type === 'password' ||
         el.type === 'password' ||
-        el.autocomplete?.includes('password') ||
-        el.element_id?.toLowerCase().includes('password') ||
-        el.id?.toLowerCase().includes('password') ||
-        el.label?.toLowerCase().includes('password') ||
-        el.placeholder?.toLowerCase().includes('password');
+        autocompleteLow.includes('password') ||
+        idLow.includes('password') ||
+        idLow.includes('pwd') ||
+        idLow.includes('passcode') ||
+        idLow.includes('pin') ||
+        labelLow.includes('password') ||
+        labelLow.includes('passcode') ||
+        labelLow.includes('pin') ||
+        placeholderLow.includes('password') ||
+        placeholderLow.includes('passcode') ||
+        placeholderLow.includes('pin');
 
       if (isPassword) {
         const elId = el.element_id || el.id;

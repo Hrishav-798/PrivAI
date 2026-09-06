@@ -344,13 +344,29 @@ export function buildSemanticTree(elements: DOMElement[], pageState: PageState):
 
 // ---- Main Scanner ----
 
+function collectAllElements(root: Document | ShadowRoot): Element[] {
+  const elements: Element[] = [];
+  try {
+    const list = root.querySelectorAll(SCAN_SELECTOR);
+    for (let i = 0; i < list.length; i++) {
+      const el = list[i];
+      if (el.id === 'privai-assistant-root' || el.id === 'privai-overlay-container') continue;
+      elements.push(el);
+      if (el.shadowRoot) {
+        elements.push(...collectAllElements(el.shadowRoot));
+      }
+    }
+  } catch {}
+  return elements;
+}
+
 /**
  * Scans the entire DOM and produces a comprehensive, structured observation
  * of the page for the agent. Every element gets a numbered highlight index
  * so the LLM can reference elements as "[1]", "[2]", etc.
  */
 export function scanDOM(): PerceptionData {
-  const allElements = document.querySelectorAll(SCAN_SELECTOR);
+  const allElements = collectAllElements(document);
   const elements: DOMElement[] = [];
   const counts = {
     interactive: 0,

@@ -4,8 +4,8 @@ import { SensitiveRegion, RawDOM } from '../../types';
 export class EmailDetector implements Detector {
   detect(dom: RawDOM): SensitiveRegion[] {
     const regions: SensitiveRegion[] = [];
-    // Basic email regex
-    const emailRegex = /([a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9_-]+)/gi;
+    // Comprehensive email regex supporting plus-addressing, subdomains, and hyphenated domains
+    const emailRegex = /([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/gi;
 
     for (const el of dom.elements) {
       const elId = el.element_id || el.id;
@@ -30,9 +30,14 @@ export class EmailDetector implements Detector {
         continue;
       }
 
-      // Check text content
-      if (el.text && typeof el.text === 'string') {
-        const matches = el.text.match(emailRegex);
+      // Check text, placeholder, label, and alt content
+      const textSources = [el.text, el.placeholder, el.label, el.alt].filter(
+        (val): val is string => typeof val === 'string' && val.trim().length > 0
+      );
+
+      let found = false;
+      for (const str of textSources) {
+        const matches = str.match(emailRegex);
         if (matches && matches.length > 0) {
           regions.push({
             id: `email_${elId}`,
@@ -42,6 +47,8 @@ export class EmailDetector implements Detector {
             source: 'regex',
             redaction: 'mask'
           });
+          found = true;
+          break;
         }
       }
     }

@@ -333,7 +333,7 @@ function executeScroll(direction: 'up' | 'down' | 'left' | 'right', amount: numb
 
   // Fallback for nested/container scrollable layouts
   setTimeout(() => {
-    if (typeof window.scrollY === 'number' && window.scrollY === prevScrollY && deltaY !== 0) {
+    if (typeof window !== 'undefined' && typeof window.scrollY === 'number' && window.scrollY === prevScrollY && deltaY !== 0) {
       const container = findScrollContainer() || document.scrollingElement || document.documentElement || document.body;
       if (container && typeof container.scrollBy === 'function') {
         container.scrollBy({ top: deltaY, left: deltaX, behavior: 'smooth' });

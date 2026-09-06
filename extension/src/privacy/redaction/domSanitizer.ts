@@ -1,5 +1,43 @@
 import { RawDOM, SanitizedDOM, SensitiveRegion, DOMElement } from '../../types';
-import { buildSemanticTree } from '../../content/domScanner';
+import { PageState } from '../../types/common';
+
+function capText(str: string, maxLen: number = 80): string {
+  if (str.length <= maxLen) return str;
+  return str.slice(0, maxLen) + '…';
+}
+
+function buildSemanticTree(elements: DOMElement[], pageState: PageState): string {
+  const lines: string[] = [];
+  lines.push(`PAGE: ${pageState.url}`);
+  lines.push(`TITLE: ${pageState.title}`);
+  lines.push(`VIEWPORT: ${pageState.scrollY}-${pageState.scrollY + pageState.viewportHeight} of ${pageState.totalHeight}px`);
+  lines.push('');
+  lines.push('ELEMENTS:');
+
+  for (const el of elements) {
+    if (el.highlightIndex === undefined) continue;
+
+    const idx = el.highlightIndex;
+    const tag = el.tag;
+    const attrs: string[] = [];
+
+    if (el.input_type && el.input_type !== el.tag) attrs.push(`type="${el.input_type}"`);
+    if (el.href) attrs.push(`href="${capText(el.href)}"`);
+    if (el.placeholder) attrs.push(`placeholder="${el.placeholder}"`);
+    if (el.checked !== undefined) attrs.push(`checked="${el.checked}"`);
+    if (el.selectedValue) attrs.push(`value="${el.selectedValue}"`);
+    if (el.alt) attrs.push(`alt="${el.alt}"`);
+
+    const attrStr = attrs.length > 0 ? ' ' + attrs.join(' ') : '';
+    const text = el.text ? ` "${capText(el.text)}"` : '';
+    const label = el.label && el.label !== el.text ? ` label="${el.label}"` : '';
+    const viewport = el.inViewport ? '' : ' [offscreen]';
+
+    lines.push(`[${idx}] <${tag}${attrStr}>${text}${label}${viewport}`);
+  }
+
+  return lines.join('\n');
+}
 
 /**
  * Sanitizes a RawDOM by removing or replacing sensitive text/values with [REDACTED].
@@ -50,12 +88,24 @@ export function sanitizeDOM(rawDOM: RawDOM, sensitiveRegions: SensitiveRegion[])
     if (isPassword) {
       sanitizedEl.text = '[REDACTED]';
       if (sanitizedEl.placeholder) sanitizedEl.placeholder = '[REDACTED]';
+      if (sanitizedEl.label) sanitizedEl.label = '[REDACTED]';
+      if (sanitizedEl.alt) sanitizedEl.alt = '[REDACTED]';
+      if (sanitizedEl.selectedValue) sanitizedEl.selectedValue = '[REDACTED]';
     } else if (region) {
       if (sanitizedEl.text && sanitizedEl.text.trim() !== '') {
         sanitizedEl.text = '[REDACTED]';
       }
       if (sanitizedEl.placeholder) {
         sanitizedEl.placeholder = '[REDACTED]';
+      }
+      if (sanitizedEl.label) {
+        sanitizedEl.label = '[REDACTED]';
+      }
+      if (sanitizedEl.alt) {
+        sanitizedEl.alt = '[REDACTED]';
+      }
+      if (sanitizedEl.selectedValue) {
+        sanitizedEl.selectedValue = '[REDACTED]';
       }
     } else {
       // Global regex sanitization for unflagged elements (defense-in-depth)
@@ -64,6 +114,15 @@ export function sanitizeDOM(rawDOM: RawDOM, sensitiveRegions: SensitiveRegion[])
       }
       if (sanitizedEl.placeholder) {
         sanitizedEl.placeholder = sanitizeText(sanitizedEl.placeholder);
+      }
+      if (sanitizedEl.label) {
+        sanitizedEl.label = sanitizeText(sanitizedEl.label);
+      }
+      if (sanitizedEl.alt) {
+        sanitizedEl.alt = sanitizeText(sanitizedEl.alt);
+      }
+      if (sanitizedEl.selectedValue) {
+        sanitizedEl.selectedValue = sanitizeText(sanitizedEl.selectedValue);
       }
     }
 
@@ -92,12 +151,12 @@ export function sanitizeDOM(rawDOM: RawDOM, sensitiveRegions: SensitiveRegion[])
  */
 function sanitizeText(text: string): string {
   return text
-    // Emails
-    .replace(/([a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9_-]+)/gi, '[REDACTED]')
-    // Phone numbers
-    .replace(/(\+?91[\-\s]?)?[6789]\d{9}|\b\d{3}-\d{2}-\d{4}\b/g, '[REDACTED]')
-    // Aadhaar / SSN
-    .replace(/\b\d{4}\s\d{4}\s\d{4}\b|\b\d{3}-\d{2}-\d{4}\b/g, '[REDACTED]')
+    // Emails (plus-addressing & subdomains)
+    .replace(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/gi, '[REDACTED]')
+    // Phone numbers (international, dot, extension, US, Indian)
+    .replace(/(?:\+(?:[1-9]\d{0,2})[\s.-]?(?:\(?\d{1,4}\)?[\s.-]?)?\d{3,4}[\s.-]?\d{3,5}(?:\s*(?:ext|x|ext.)\s*\d+)?)|(?:\b\d{3}[\.\-]\d{3}[\.\-]\d{4}\b)|(?:\b\(?\d{3}\)?[\s.-]\d{3}[\s.-]\d{4}(?:\s*(?:ext|x|ext.)\s*\d+)?\b)|(?:\b(?:\+?91[\-\s]?)?[6789]\d{9}\b)/g, '[REDACTED]')
+    // Aadhaar / SSN / Indian PAN
+    .replace(/\b\d{4}[\s\-\.]\d{4}[\s\-\.]\d{4}\b|\b\d{3}-\d{2}-\d{4}\b|\b[A-Z]{5}[0-9]{4}[A-Z]\b/g, '[REDACTED]')
     // Formatted credit cards
     .replace(/\b(?:\d{4}[\s-]){3}\d{4}\b/g, '[REDACTED]')
     // API keys

@@ -1,0 +1,93 @@
+{
+  "task": "Inspect profiles on visual perception benchmark page",
+  "sanitized_dom": [
+    {
+      "id": "avatar-1",
+      "tag": "img",
+      "text": "",
+      "label": "Synthetic Face Avatar 1",
+      "alt": "[REDACTED]"
+    },
+    {
+      "id": "tile-name-1",
+      "tag": "h3",
+      "text": "Alex Morgan",
+      "label": "Alex Morgan"
+    },
+    {
+      "id": "badge-email-1",
+      "tag": "div",
+      "text": "[REDACTED]",
+      "label": "[REDACTED]"
+    },
+    {
+      "id": "badge-phone-1",
+      "tag": "div",
+      "text": "[REDACTED]",
+      "label": "[REDACTED]"
+    },
+    {
+      "id": "badge-id-1",
+      "tag": "div",
+      "text": "[REDACTED]",
+      "label": "[REDACTED]"
+    },
+    {
+      "id": "btn-view-alex",
+      "tag": "button",
+      "type": "button",
+      "text": "View Profile",
+      "label": "View Profile"
+    }
+  ],
+  "redactions": [
+    {
+      "type": "face",
+      "bbox": {
+        "x": 50,
+        "y": 50,
+        "width": 100,
+        "height": 100
+      },
+      "treatment": "blur"
+    },
+    {
+      "type": "email",
+      "bbox": {
+        "x": 50,
+        "y": 180,
+        "width": 120,
+        "height": 20
+      },
+      "treatment": "mask"
+    },
+    {
+      "type": "phone",
+      "bbox": {
+        "x": 50,
+        "y": 210,
+        "width": 100,
+        "height": 20
+      },
+      "treatment": "mask"
+    },
+    {
+      "type": "id",
+      "bbox": {
+        "x": 50,
+        "y": 240,
+        "width": 110,
+        "height": 20
+      },
+      "treatment": "mask"
+    }
+  ],
+  "screenshot": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+  "privacy": {
+    "raw_data_removed": true,
+    "sanitized": true,
+    "regions_detected": 4,
+    "regions_redacted": 4,
+    "scan_ms": 12.4
+  }
+}

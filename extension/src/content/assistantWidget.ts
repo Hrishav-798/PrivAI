@@ -1006,14 +1006,14 @@ export class AssistantWidget {
             badgeType: 'success',
             timestamp: event.timestamp || Date.now(),
           });
-        } else if (event.label === 'NETWORK BLOCKED') {
+        } else if (event.label === 'PRIVACY GATE BLOCKED' || event.label === 'NETWORK BLOCKED') {
           this.isThinking = false;
           this.addMessage({
             id: `evt_${Date.now()}_${i}`,
             sender: 'assistant',
-            text: `🚨 NETWORK REQUEST BLOCKED! Unredacted sensitive data detected by Hard Client Privacy Gate. Zero bytes were sent.`,
-            badge: 'Privacy Violation Prevented',
-            badgeType: 'danger',
+            text: event.detail || "⚠️ Privacy Notice: This field looks like it contains sensitive information I can't process safely — please handle it manually.",
+            badge: 'Manual Input Required',
+            badgeType: 'warning',
             timestamp: event.timestamp || Date.now(),
           });
         } else if (event.label === 'VLM RESPONSE') {
@@ -1068,5 +1068,21 @@ export class AssistantWidget {
     }
 
     this.renderMessages();
+  }
+
+  public handlePrivacyBlocked(payload?: any) {
+    this.isThinking = false;
+    const guidance = payload?.message || "⚠️ Privacy Notice: This field looks like it contains sensitive information I can't process safely — please handle it manually.";
+    this.addMessage({
+      id: `gate_block_${Date.now()}`,
+      sender: 'assistant',
+      text: guidance,
+      badge: 'Manual Input Required',
+      badgeType: 'warning',
+      timestamp: Date.now(),
+    });
+    if (!this.isOpen) {
+      this.toggleDialog();
+    }
   }
 }

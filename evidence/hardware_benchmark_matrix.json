@@ -1,0 +1,35 @@
+{
+  "timestamp": 1788728218.4919405,
+  "profiles": {
+    "profile_a_webgpu": {
+      "name": "Profile A (High Performance - WebGPU)",
+      "vision_inference_ms": 12.7,
+      "privacy_scan_ms": 22.4,
+      "total_client_ms": 35.0,
+      "memory_mb": 14.8,
+      "provider": "webgpu"
+    },
+    "profile_b_wasm": {
+      "name": "Profile B (Standard - CPU WASM)",
+      "vision_inference_ms": 26.3,
+      "privacy_scan_ms": 6.2,
+      "total_client_ms": 32.5,
+      "memory_mb": 13.5,
+      "provider": "wasm"
+    },
+    "profile_c_throttled": {
+      "name": "Profile C (Constrained - 4x CPU Throttle)",
+      "vision_inference_ms": 90.0,
+      "privacy_scan_ms": 29.8,
+      "total_client_ms": 119.8,
+      "memory_mb": 15.2,
+      "provider": "wasm_throttled"
+    }
+  },
+  "zero_pii_egress_verified": true,
+  "wire_evidence_files": [
+    "wire_traffic_register.json",
+    "wire_traffic_search.json",
+    "wire_traffic_visual.json"
+  ]
+}

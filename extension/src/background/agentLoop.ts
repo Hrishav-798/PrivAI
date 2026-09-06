@@ -25,6 +25,7 @@ import { PrivacyEngine } from '../privacy/PrivacyEngine';
 import { validateAction, classifyActionRisk, buildConfirmationRequest } from './actionValidator';
 import { ILocalVisionModel } from '../perception/LocalVisionModel';
 import { LocalVisionClient } from '../perception/LocalVisionClient';
+import { LocalTextDetector, ILocalTextDetector } from '../perception/LocalTextDetector';
 import { mergeDetections } from '../perception/detectionMerger';
 import { isGreeting, isReadOnlyTask, isTaskLikelyComplete, buildStepHistorySummary } from './agentPlanner';
 import { validateActionResult, getStatusEmoji } from './agentValidator';
@@ -34,6 +35,7 @@ export class AgentLoop {
   private isRunning: boolean = false;
   private privacyEngine: PrivacyEngine;
   private localVision: ILocalVisionModel;
+  private localTextDetector: ILocalTextDetector;
   private testFailureMode: boolean = false;
   private targetTabId: number | null = null;
   private backendBaseUrl: string = 'http://localhost:8000';
@@ -44,6 +46,7 @@ export class AgentLoop {
   constructor() {
     this.privacyEngine = new PrivacyEngine();
     this.localVision = new LocalVisionClient();
+    this.localTextDetector = new LocalTextDetector();
     this.state = this.getInitialState();
 
     // Initialize vision model asynchronously
@@ -59,6 +62,15 @@ export class AgentLoop {
       );
       this.sendHeartbeat();
     });
+
+    // Initialize pixel text detector asynchronously
+    this.localTextDetector.initialize().then(() => {
+      this.postSystemEvent(
+        'model_initialized',
+        'Local Text Detector Ready',
+        `Pixel OCR-pass detector loaded via ${this.localTextDetector.getBackend()}`
+      );
+    }).catch(() => {});
 
     // Send periodic heartbeats to backend
     this.sendHeartbeat();
@@ -295,8 +307,9 @@ export class AgentLoop {
       },
     };
 
-    // 3. LOCAL VISION INFERENCE (ONNX Runtime Web)
+    // 3. LOCAL VISION INFERENCE (ONNX Runtime Web: Face + Pixel Text Region Detection)
     let visionDetections: any[] = [];
+    let textDetections: any[] = [];
     let visionMs = 0;
     if (this.localVision.isReady()) {
       const vStart = performance.now();
@@ -306,30 +319,54 @@ export class AgentLoop {
         imageBitmap.width,
         imageBitmap.height
       );
+
+      if (this.localTextDetector.isReady()) {
+        try {
+          textDetections = await this.localTextDetector.detectTextRegions(
+            rawContext.screenshot,
+            imageBitmap.width,
+            imageBitmap.height
+          );
+        } catch (textErr) {
+          console.warn('[PrivAI] Pixel text detection note:', textErr);
+        }
+      }
+
       visionMs = performance.now() - vStart;
+      const combinedDetections = [...visionDetections, ...textDetections];
 
       this.updateState({
-        visionInferenceMs: this.localVision.getLastInferenceTime(),
-        lastVisionDetections: visionDetections,
-        visualRegionCount: visionDetections.length,
+        visionInferenceMs: this.localVision.getLastInferenceTime() + this.localTextDetector.getLastInferenceTime(),
+        lastVisionDetections: combinedDetections,
+        visualRegionCount: combinedDetections.length,
       });
 
       this.postSystemEvent(
         'local_vision',
-        'Local ONNX Inference Completed',
-        `${visionDetections.length} visual regions detected in ${this.localVision.getLastInferenceTime().toFixed(1)}ms (${this.localVision.getBackend()})`
+        'Local ONNX & Pixel Vision Inference Completed',
+        `${visionDetections.length} faces, ${textDetections.length} visual text regions in ${visionMs.toFixed(1)}ms (${this.localVision.getBackend()})`
       );
     }
 
-    // Map vision detections to sensitive regions for face blurring
-    const visionSensitiveRegions: SensitiveRegion[] = visionDetections.map((vd: any) => ({
-      id: vd.id || `face_${Math.random().toString(36).slice(2, 7)}`,
-      type: vd.className || 'face',
-      bbox: vd.bbox,
-      confidence: vd.confidence || 1.0,
-      source: 'vision',
-      redaction: 'blur',
-    }));
+    // Map vision detections to sensitive regions for face blurring and visual text masking
+    const visionSensitiveRegions: SensitiveRegion[] = [
+      ...visionDetections.map((vd: any) => ({
+        id: vd.id || `face_${Math.random().toString(36).slice(2, 7)}`,
+        type: vd.className || 'face',
+        bbox: vd.bbox,
+        confidence: vd.confidence || 1.0,
+        source: 'vision' as const,
+        redaction: 'blur' as const,
+      })),
+      ...textDetections.map((td: any) => ({
+        id: td.id || `pixel_text_${Math.random().toString(36).slice(2, 7)}`,
+        type: td.className || 'visual_text_region',
+        bbox: td.bbox,
+        confidence: td.confidence || 0.9,
+        source: 'vision' as const,
+        redaction: 'mask' as const,
+      })),
+    ];
 
     // 4. LOCAL PRIVACY ENGINE (Detect, Redact, Validate)
     this.updateState({ agentState: 'PRIVACY_SCANNING', privacyStatus: 'SCANNING' });
@@ -371,13 +408,30 @@ export class AgentLoop {
         privacyStatus: 'BLOCKED',
         networkStatus: 'BLOCKED',
       });
-      this.addTimelineEvent('NETWORK BLOCKED', err.message);
+      const guidance = "⚠️ Privacy Notice: This field looks like it contains sensitive information I can't process safely — please handle it manually.";
+      this.addTimelineEvent('PRIVACY GATE BLOCKED', guidance);
       this.postSystemEvent(
         'request_blocked',
-        'NETWORK REQUEST BLOCKED',
-        err.message,
+        'PRIVACY GATE BLOCKED',
+        guidance,
         'error'
       );
+
+      // Gracefully notify active tab assistant widget to render guidance card
+      if (this.targetTabId && typeof chrome !== 'undefined' && chrome.tabs?.sendMessage) {
+        try {
+          chrome.tabs.sendMessage(this.targetTabId, {
+            type: 'PRIVACY_GATE_BLOCKED',
+            payload: {
+              message: guidance,
+              reason: err.message,
+              step: this.currentStep,
+            },
+          }, () => {});
+        } catch {}
+      }
+
+      this.isRunning = false;
       return;
     }
 

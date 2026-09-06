@@ -103,7 +103,7 @@ export interface SanitizedDOM {
 
 // ---- Vision Types ----
 
-export type VisionBackend = 'webgpu' | 'wasm' | 'none';
+export type VisionBackend = 'webgpu' | 'wasm' | 'fallback-heuristic' | 'none';
 
 export interface VisionDetection {
   label: string;
@@ -147,6 +147,7 @@ export interface SensitiveRegion {
 }
 
 export interface RedactionMetadata {
+  id?: string;
   type: SensitiveType;
   bbox: BBox;
   treatment: RedactionType;

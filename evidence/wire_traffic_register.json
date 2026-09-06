@@ -1,0 +1,93 @@
+{
+  "task": "Register a new user account on the demo page",
+  "sanitized_dom": [
+    {
+      "id": "reg-name",
+      "tag": "input",
+      "type": "text",
+      "text": "",
+      "placeholder": "Enter your full name",
+      "label": "Full Name"
+    },
+    {
+      "id": "reg-email",
+      "tag": "input",
+      "type": "email",
+      "text": "[REDACTED]",
+      "placeholder": "[REDACTED]",
+      "label": "[REDACTED]"
+    },
+    {
+      "id": "reg-phone",
+      "tag": "input",
+      "type": "tel",
+      "text": "[REDACTED]",
+      "placeholder": "[REDACTED]",
+      "label": "[REDACTED]"
+    },
+    {
+      "id": "reg-password",
+      "tag": "input",
+      "type": "password",
+      "text": "[REDACTED]",
+      "placeholder": "[REDACTED]",
+      "label": "[REDACTED]"
+    },
+    {
+      "id": "reg-address",
+      "tag": "textarea",
+      "type": "textarea",
+      "text": "[REDACTED]",
+      "placeholder": "[REDACTED]",
+      "label": "Residential Address"
+    },
+    {
+      "id": "reg-submit",
+      "tag": "button",
+      "type": "submit",
+      "text": "Submit Registration",
+      "placeholder": "",
+      "label": "Submit Registration"
+    }
+  ],
+  "redactions": [
+    {
+      "type": "email",
+      "bbox": {
+        "x": 100,
+        "y": 120,
+        "width": 200,
+        "height": 30
+      },
+      "treatment": "mask"
+    },
+    {
+      "type": "phone",
+      "bbox": {
+        "x": 100,
+        "y": 160,
+        "width": 200,
+        "height": 30
+      },
+      "treatment": "mask"
+    },
+    {
+      "type": "password",
+      "bbox": {
+        "x": 100,
+        "y": 200,
+        "width": 200,
+        "height": 30
+      },
+      "treatment": "blackout"
+    }
+  ],
+  "screenshot": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+  "privacy": {
+    "raw_data_removed": true,
+    "sanitized": true,
+    "regions_detected": 3,
+    "regions_redacted": 3,
+    "scan_ms": 6.8
+  }
+}

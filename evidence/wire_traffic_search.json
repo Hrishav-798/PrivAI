@@ -1,0 +1,43 @@
+{
+  "task": "Search for Kubernetes HPA documentation and click the first result",
+  "sanitized_dom": [
+    {
+      "id": "search-input",
+      "tag": "input",
+      "type": "search",
+      "text": "Kubernetes HPA autoscaling deployment query",
+      "placeholder": "Search for Kubernetes HPA...",
+      "label": ""
+    },
+    {
+      "id": "search-button",
+      "tag": "button",
+      "type": "button",
+      "text": "\ud83d\udd0d Search",
+      "label": "Search"
+    },
+    {
+      "id": "result-k8s-hpa",
+      "tag": "a",
+      "type": "link",
+      "text": "Kubernetes Horizontal Pod Autoscaling (HPA)",
+      "label": "Official Docs"
+    },
+    {
+      "id": "result-k8s-deploy",
+      "tag": "a",
+      "type": "link",
+      "text": "Kubernetes Deployments Guide",
+      "label": "Official Docs"
+    }
+  ],
+  "redactions": [],
+  "screenshot": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+  "privacy": {
+    "raw_data_removed": true,
+    "sanitized": true,
+    "regions_detected": 0,
+    "regions_redacted": 0,
+    "scan_ms": 1.8
+  }
+}

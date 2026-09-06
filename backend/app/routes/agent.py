@@ -16,13 +16,13 @@ from app.schemas.context import AgentRequest
 from app.schemas.action import ActionResponse, Action, ErrorResponse
 from app.services.ollama_service import OllamaService
 from app.services.action_service import ActionService
+from app.services.model_router import model_router
 from app.services.event_service import event_service
 from app.services.metrics_service import metrics_service
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
-ollama = OllamaService()
 action_service = ActionService()
 
 # Defense-in-depth PII patterns (server-side secondary check)
@@ -121,11 +121,9 @@ async def plan_action(request: AgentRequest):
         "info",
     )
 
-    # Build VLM prompt
-    start = time.time()
+    # Route and reason via ModelRouter (local Ollama vs Cloud VLM based on complexity)
     try:
-        vlm_response = await ollama.generate_action(request)
-        vlm_ms = (time.time() - start) * 1000
+        vlm_response, model_used, vlm_ms = await model_router.route_and_generate(request)
     except Exception as e:
         logger.error('{"event":"vlm_error","error":"%s"}', str(e))
         event_service.add_event(
