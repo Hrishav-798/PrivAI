@@ -108,9 +108,17 @@ Tested in `backend/tests/test_remote_privacy_boundary.py` against realistic page
 ---
 
 ### 4. Dynamic Server-Side Model Routing (Zero Privacy Impact)
-- **Local Ollama**: Fast, low-latency reasoning on device for standard form-filling and interaction tasks.
-- **Cloud VLM**: Scaled reasoning for deep analytical, synthesis, and high element-density queries.
-- **Strict Single Destination**: The client transmits only to the local backend firewall (`http://localhost:8000/api/agent/plan`); routing is strictly server-side optimization and both models receive the identical sanitized payload. Cloud API keys remain securely on the server.
+- **Local Ollama (`qwen2.5vl:7b`)**: Fast, low-latency reasoning on device for standard form-filling and interaction tasks.
+- **Cloud VLM (`gpt-4o`)**: Scaled reasoning for deep analytical, synthesis, and high element-density queries.
+- **Strict Single Destination Guarantee**: The client transmits only to the local backend firewall (`http://localhost:8000/api/agent/plan`); routing is strictly server-side optimization and both models receive the identical sanitized payload. Cloud API keys remain securely on the server.
+
+---
+
+## 🚀 Quick Start Guide
+
+### Prerequisites
+- **Node.js**: v18+ (tested on Node v20/v24)
+- **Python**: v3.10+
 - **Google Chrome** (or Chromium-based browser: Brave / Edge)
 
 ---
@@ -177,13 +185,13 @@ npm run ext:build
 
 ## 🧪 End-to-End Testing & Verification
 
-### Run Automated Test Suite (113 Tests)
+### Run Automated Test Suite (124 Tests)
 ```bash
 npm test
 ```
 Runs both:
-- **Vitest Extension Suite** (79 tests across 10 test files): In-page assistant widget & smart auto-scroll, DOM scanning with shadow roots & canvas, hardened PII detectors, OffscreenCanvas redaction, privacy firewall, local vision pipeline, screen understanding model, adversarial privacy evaluation, multi-profile hardware benchmarks.
-- **Pytest Backend Suite** (34 tests across 3 test files): Context schemas, PII defense-in-depth, agent reasoning, event ring buffer, telemetry endpoints, wire-level zero-PII boundary verification on demo pages.
+- **Vitest Extension Suite** (81 tests across 11 test files): In-page assistant widget & smart auto-scroll, Shadow DOM scanner, hardened PII detectors, OffscreenCanvas redaction, privacy firewall, local vision pipeline, viewport pixel text region detector (`LocalTextDetector`), screen understanding model (`ScreenUnderstandingModel`), graceful degradation on gate block, adversarial privacy evaluation (23 cases), multi-profile hardware benchmarks.
+- **Pytest Backend Suite** (43 tests across 5 test files): Context schemas, PII defense-in-depth, agent reasoning, event ring buffer, telemetry endpoints, dynamic model routing (`test_model_router.py`), client bundle secret scanning (`test_bundle_secrets.py`), and wire-level zero-PII boundary verification on demo pages (`test_remote_privacy_boundary.py`).
 
 ---
 
@@ -213,7 +221,7 @@ Open `http://localhost:5000` in Chrome to test the three benchmark scenarios:
 1. Open `http://localhost:5000/visual.html`.
 2. The page displays profile photos with synthetic faces and mock ID badges.
 3. Click **Start Visual Agent**:
-   - Chrome Offscreen document runs **UltraFace ONNX** locally on-device.
+   - Chrome Offscreen document runs **UltraFace ONNX** and **LocalTextDetector** locally on-device.
    - Visual bounding boxes are detected via WebGPU/WASM.
    - Sensitive visual regions are blurred on an `OffscreenCanvas`.
    - Bounding box overlay displays detected confidence scores without any image data leaving the browser.
@@ -234,7 +242,17 @@ To prevent field mismatch between content scripts and background detectors, Priv
 - Sanitized placeholders, autocomplete hints, and aria labels.
 
 ### 3. Hard Client Privacy Gate
-In [privacyValidator.ts](extension/src/privacy/validation/privacyValidator.ts), every outbound payload must pass `assertSafeToTransmit()`. Any detection of unredacted emails, phone numbers, or passwords instantly throws an exception, aborting the network call before transit.
+In [privacyValidator.ts](extension/src/privacy/validation/privacyValidator.ts), every outbound payload must pass `assertSafeToTransmit()`. Any detection of unredacted emails, phone numbers, passwords, API keys, or private keys instantly throws a `PrivacyViolationError`, strictly aborting the network call before transit.
+
+### 4. Graceful Degraded UX on Privacy Block
+When the privacy firewall blocks an unredacted input or an unsafe field is encountered, the agent does **not** crash or freeze. The in-page assistant widget immediately catches the block event and surfaces an actionable card with badge **`Manual Input Required`**:
+> *"⚠️ Privacy Notice: This field looks like it contains sensitive information I can't process safely — please handle it manually."*
+
+### 5. Server-Side Dynamic Model Routing & Secret Isolation
+- Outbound client context is transmitted **exclusively** to the local backend endpoint (`http://localhost:8000/api/agent/plan`).
+- The backend `ModelRouter` inspects reasoning complexity and routes to local Ollama or Cloud VLM.
+- Both models receive the **identical sanitized context**.
+- Cloud API keys remain securely on the server; the compiled Chrome extension bundle is regularly audited by `test_bundle_secrets.py` and contains 0 secret keys.
 
 ---
 
@@ -246,9 +264,9 @@ PrivAI/
 │   ├── app/
 │   │   ├── routes/           # agent.py, health.py, telemetry.py
 │   │   ├── schemas/          # context.py, action.py
-│   │   ├── services/         # ollama_service.py, event_service.py, metrics_service.py
+│   │   ├── services/         # model_router.py, ollama_service.py, event_service.py, metrics_service.py
 │   │   └── main.py           # Lifespan handlers, CORS, routers
-│   ├── tests/                # test_agent.py, test_schemas.py
+│   ├── tests/                # test_agent.py, test_model_router.py, test_bundle_secrets.py, test_remote_privacy_boundary.py, test_schemas.py
 │   └── requirements.txt
 ├── dashboard/                # Real-Time Monitoring & Metrics Dashboard (Port 3000)
 │   ├── src/                  # App.tsx, styles.css, main.tsx
@@ -261,13 +279,18 @@ PrivAI/
 │   ├── search.html           # Scenario 2: Search & Navigation
 │   ├── visual.html           # Scenario 3: Biometric Visual Perception
 │   └── styles.css
+├── evidence/                 # Intercepted Wire Payloads & Hardware Benchmarks
+│   ├── wire_traffic_register.json
+│   ├── wire_traffic_search.json
+│   ├── wire_traffic_visual.json
+│   └── hardware_benchmark_matrix.json
 ├── extension/                # Chrome Extension Manifest V3
 │   ├── public/               # models/ultraface.onnx, wasm binaries, icons
 │   ├── src/
 │   │   ├── background/       # service-worker.ts, agentLoop.ts, actionValidator.ts
 │   │   ├── content/          # content-script.ts, domScanner.ts, executor.ts, assistantWidget.ts
 │   │   ├── offscreen/        # offscreen.ts (UltraFace ONNX execution)
-│   │   ├── perception/       # LocalVisionModel.ts, LocalVisionClient.ts
+│   │   ├── perception/       # LocalVisionModel.ts, LocalTextDetector.ts, ScreenUnderstandingModel.ts
 │   │   ├── popup/            # Popup dashboard UI
 │   │   ├── privacy/          # Detectors, Redaction (OffscreenCanvas), PrivacyValidator
 │   │   └── tests/            # Vitest unit & integration test suites
