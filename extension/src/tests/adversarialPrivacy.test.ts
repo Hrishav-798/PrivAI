@@ -125,7 +125,7 @@ describe('Adversarial PII Detection & Privacy Boundary Tests', () => {
       expectedTypes: [],
     },
 
-    // 7. Known limitation: Raster image rendered on canvas (requires ViT/OCR, cannot be extracted by DOM regex)
+    // 7. Known limitation: Raster image rendered on canvas (requires neural OCR model, cannot be extracted by DOM regex or pixel gradient heuristic)
     {
       name: 'PII burned into canvas pixels (known OCR limitation)',
       element: { element_id: 'adv-canvas-raster', tag: 'canvas', role: 'img', text: '', label: 'Scanned document preview', visible: true, interactive: false, enabled: true, focused: false, bbox: { x: 0, y: 500, width: 300, height: 200 } },

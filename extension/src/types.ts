@@ -53,6 +53,8 @@ export interface DOMElement {
   highlightIndex?: number;
   /** href for links */
   href?: string;
+  /** src for images/media */
+  src?: string;
   /** alt text for images */
   alt?: string;
   /** checked state for checkboxes/radio */
@@ -133,9 +135,20 @@ export type SensitiveType =
   | 'credit_card'
   | 'secret';
 
-export type DetectionSource = 'dom' | 'regex' | 'vision' | 'ner';
+export type DetectionSource = 'dom' | 'regex' | 'vision' | 'ner' | 'ocr' | 'face' | 'semantic' | 'heuristic';
+
+export type SensitiveSeverity = 'low' | 'medium' | 'high' | 'critical';
 
 export type RedactionType = 'blackout' | 'mask' | 'blur';
+
+export interface RegionProvenance {
+  detector: string;
+  ruleId?: string;
+  timestamp?: number;
+  rawType?: string;
+  sourceType?: DetectionSource;
+  mergedFrom?: string[];
+}
 
 export interface SensitiveRegion {
   id: string;
@@ -144,6 +157,9 @@ export interface SensitiveRegion {
   confidence: number;
   source: DetectionSource;
   redaction: RedactionType;
+  severity?: SensitiveSeverity;
+  reason?: string;
+  provenance?: RegionProvenance;
 }
 
 export interface RedactionMetadata {
@@ -151,6 +167,10 @@ export interface RedactionMetadata {
   type: SensitiveType;
   bbox: BBox;
   treatment: RedactionType;
+  source?: DetectionSource;
+  severity?: SensitiveSeverity;
+  reason?: string;
+  provenance?: RegionProvenance;
 }
 
 export interface PrivacyMetadata {
@@ -159,6 +179,12 @@ export interface PrivacyMetadata {
   regions_detected: number;
   regions_redacted: number;
   scan_ms: number;
+  version?: string;
+  timestamp?: number;
+  dom_sanitized?: boolean;
+  screenshot_sanitized?: boolean;
+  url_sanitized?: boolean;
+  policy_version?: string;
 }
 
 // ---- Context Types ----

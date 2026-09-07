@@ -874,7 +874,7 @@ export class AssistantWidget {
   }
 
   private startAgent(task: string) {
-    console.log('[PrivAI Chat] User submitted task:', task);
+    console.log('[PrivAI Chat] User submitted task (characters: %d)', task.length);
 
     // Add user message and scroll to bottom
     this.addMessage({

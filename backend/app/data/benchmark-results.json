@@ -1,0 +1,379 @@
+{
+  "pii": {
+    "totalCases": 38,
+    "sensitiveCases": 25,
+    "safeLures": 13,
+    "truePositives": 25,
+    "falsePositives": 2,
+    "falseNegatives": 0,
+    "trueNegatives": 11,
+    "precision": 92.59,
+    "recall": 100,
+    "f1Score": 96.15
+  },
+  "redaction": {
+    "averageIoU": 99.51,
+    "coveragePercent": 100,
+    "missedRegions": 0,
+    "falseRedactions": 2
+  },
+  "latency": {
+    "privacyScanP50Ms": 0.44,
+    "privacyScanP95Ms": 0.88,
+    "regionMergeP50Ms": 0.16,
+    "transmissionGateP50Ms": 0.18,
+    "endToEndLocalMs": 0.83,
+    "measurementType": "MEASURED",
+    "pipelineScope": "DOM Scan + Canonical Merge + Transmission Gate (Excludes UltraFace ONNX)"
+  },
+  "hardwareProfiles": [
+    {
+      "profile": "Profile A (High Perf)",
+      "backend": "WebGPU (Local ONNX)",
+      "visionMs": 14.5,
+      "privacyMs": 0.43822499999998854,
+      "totalMs": 14.9,
+      "type": "SIMULATED"
+    },
+    {
+      "profile": "Profile B (WASM CPU)",
+      "backend": "WASM (Local ONNX)",
+      "visionMs": 38.2,
+      "privacyMs": 0.43822499999998854,
+      "totalMs": 38.6,
+      "type": "MEASURED"
+    },
+    {
+      "profile": "Profile C (Throttled)",
+      "backend": "WASM (4x CPU Throttled)",
+      "visionMs": 94,
+      "privacyMs": 1.1,
+      "totalMs": 95.1,
+      "type": "SIMULATED"
+    }
+  ],
+  "modelAssets": [
+    {
+      "name": "UltraFace Slim ONNX (320x240)",
+      "type": "NEURAL_ONNX",
+      "file": "extension/public/models/ultraface.onnx",
+      "sizeMB": 1.14,
+      "inferenceBackend": "ONNX Runtime Web (WebGPU / WASM)",
+      "notes": "Genuine pretrained neural face detection model with real weights"
+    },
+    {
+      "name": "Local Pixel Contour Detector",
+      "type": "HEURISTIC_CV",
+      "file": "src/perception/LocalTextDetector.ts",
+      "sizeMB": 0.02,
+      "inferenceBackend": "Offscreen Canvas Pixel Luminance / Sobel Contour",
+      "notes": "Heuristic pixel gradient pass for visual text bounding. Not a learned neural OCR."
+    }
+  ],
+  "caseDetails": [
+    {
+      "id": "cred-pwd-input-type",
+      "name": "Password field via input[type=password]",
+      "expectedSensitive": true,
+      "detected": true,
+      "result": "TP",
+      "iou": 1
+    },
+    {
+      "id": "cred-pwd-autocomplete",
+      "name": "Password field identified via autocomplete",
+      "expectedSensitive": true,
+      "detected": true,
+      "result": "TP",
+      "iou": 1
+    },
+    {
+      "id": "cred-pwd-placeholder",
+      "name": "Password hint in placeholder",
+      "expectedSensitive": true,
+      "detected": true,
+      "result": "TP",
+      "iou": 1
+    },
+    {
+      "id": "pii-email-standard",
+      "name": "Standard corporate email address",
+      "expectedSensitive": true,
+      "detected": true,
+      "result": "TP",
+      "iou": 1
+    },
+    {
+      "id": "pii-email-plus-address",
+      "name": "Email with plus-addressing & subdomain",
+      "expectedSensitive": true,
+      "detected": true,
+      "result": "TP",
+      "iou": 1
+    },
+    {
+      "id": "pii-phone-us",
+      "name": "US phone number with dashes",
+      "expectedSensitive": true,
+      "detected": true,
+      "result": "TP",
+      "iou": 1
+    },
+    {
+      "id": "pii-phone-intl-india",
+      "name": "Indian mobile number with +91 country code",
+      "expectedSensitive": true,
+      "detected": true,
+      "result": "TP",
+      "iou": 1
+    },
+    {
+      "id": "pii-phone-intl-dot",
+      "name": "International phone with dots and extension",
+      "expectedSensitive": true,
+      "detected": true,
+      "result": "TP",
+      "iou": 1
+    },
+    {
+      "id": "pii-id-aadhaar",
+      "name": "Indian Aadhaar number (4-4-4 formatted)",
+      "expectedSensitive": true,
+      "detected": true,
+      "result": "TP",
+      "iou": 1
+    },
+    {
+      "id": "pii-id-pan",
+      "name": "Indian Income Tax PAN card number",
+      "expectedSensitive": true,
+      "detected": true,
+      "result": "TP",
+      "iou": 1
+    },
+    {
+      "id": "pii-id-ssn",
+      "name": "US Social Security Number (SSN)",
+      "expectedSensitive": true,
+      "detected": true,
+      "result": "TP",
+      "iou": 1
+    },
+    {
+      "id": "fin-cc-valid-luhn-visa",
+      "name": "Synthetic Visa card (passes Luhn check)",
+      "expectedSensitive": true,
+      "detected": true,
+      "result": "TP",
+      "iou": 1
+    },
+    {
+      "id": "fin-cc-valid-luhn-mc",
+      "name": "Synthetic Mastercard (passes Luhn check)",
+      "expectedSensitive": true,
+      "detected": true,
+      "result": "TP",
+      "iou": 1
+    },
+    {
+      "id": "fin-cc-unformatted",
+      "name": "16-digit unformatted credit card number with Luhn",
+      "expectedSensitive": true,
+      "detected": true,
+      "result": "TP",
+      "iou": 1
+    },
+    {
+      "id": "sec-api-openai",
+      "name": "OpenAI Secret API Key pattern",
+      "expectedSensitive": true,
+      "detected": true,
+      "result": "TP",
+      "iou": 1
+    },
+    {
+      "id": "sec-api-aws",
+      "name": "AWS Access Key ID",
+      "expectedSensitive": true,
+      "detected": true,
+      "result": "TP",
+      "iou": 1
+    },
+    {
+      "id": "sec-api-github",
+      "name": "GitHub Personal Access Token",
+      "expectedSensitive": true,
+      "detected": true,
+      "result": "TP",
+      "iou": 1
+    },
+    {
+      "id": "sec-priv-key-rsa",
+      "name": "RSA Private Key Header",
+      "expectedSensitive": true,
+      "detected": true,
+      "result": "TP",
+      "iou": 1
+    },
+    {
+      "id": "vis-face-portrait",
+      "name": "Synthetic User Avatar Face Region",
+      "expectedSensitive": true,
+      "detected": true,
+      "result": "TP",
+      "iou": 0.9142857142857143
+    },
+    {
+      "id": "vis-canvas-receipt",
+      "name": "Canvas Rendered Receipt Total (Pixel Text Region)",
+      "expectedSensitive": true,
+      "detected": true,
+      "result": "TP",
+      "iou": 0.9643201542912246
+    },
+    {
+      "id": "safe-person-name",
+      "name": "Public contact name (safe lure - should not falsely detect as credential)",
+      "expectedSensitive": false,
+      "detected": false,
+      "result": "TN",
+      "iou": 1
+    },
+    {
+      "id": "safe-order-number",
+      "name": "Generic tracking / order ID (should not falsely flag as Aadhaar or card)",
+      "expectedSensitive": false,
+      "detected": false,
+      "result": "TN",
+      "iou": 1
+    },
+    {
+      "id": "safe-price-currency",
+      "name": "Monetary price tag with formatting",
+      "expectedSensitive": false,
+      "detected": false,
+      "result": "TN",
+      "iou": 1
+    },
+    {
+      "id": "safe-public-url",
+      "name": "Harmless public documentation URL",
+      "expectedSensitive": false,
+      "detected": false,
+      "result": "TN",
+      "iou": 1
+    },
+    {
+      "id": "safe-address",
+      "name": "Physical business address",
+      "expectedSensitive": false,
+      "detected": false,
+      "result": "TN",
+      "iou": 1
+    },
+    {
+      "id": "safe-calendar-date",
+      "name": "Standard timestamp and release date",
+      "expectedSensitive": false,
+      "detected": false,
+      "result": "TN",
+      "iou": 1
+    },
+    {
+      "id": "safe-nav-button",
+      "name": "Interactive Submit Order Button",
+      "expectedSensitive": false,
+      "detected": false,
+      "result": "TN",
+      "iou": 1
+    },
+    {
+      "id": "safe-invalid-card-string",
+      "name": "16 digit random string that fails Luhn check",
+      "expectedSensitive": false,
+      "detected": true,
+      "result": "FP",
+      "iou": 0
+    },
+    {
+      "id": "sec-api-mixed-case",
+      "name": "Mixed-case OpenAI API Key with underscores",
+      "expectedSensitive": true,
+      "detected": true,
+      "result": "TP",
+      "iou": 1
+    },
+    {
+      "id": "pii-phone-intl-france",
+      "name": "French corporate phone (+33 with spaces)",
+      "expectedSensitive": true,
+      "detected": true,
+      "result": "TP",
+      "iou": 1
+    },
+    {
+      "id": "pii-phone-intl-germany",
+      "name": "German office phone (+49 format)",
+      "expectedSensitive": true,
+      "detected": true,
+      "result": "TP",
+      "iou": 1
+    },
+    {
+      "id": "sec-jwt-token",
+      "name": "JWT Bearer Access Token",
+      "expectedSensitive": true,
+      "detected": true,
+      "result": "TP",
+      "iou": 1
+    },
+    {
+      "id": "composite-multi-pii",
+      "name": "Composite element with email and phone in single node",
+      "expectedSensitive": true,
+      "detected": true,
+      "result": "TP",
+      "iou": 1
+    },
+    {
+      "id": "safe-invoice-id",
+      "name": "Alpha-numeric invoice ID (not sensitive)",
+      "expectedSensitive": false,
+      "detected": false,
+      "result": "TN",
+      "iou": 1
+    },
+    {
+      "id": "safe-tracking-number",
+      "name": "12-digit parcel tracking number starting with zero (not Aadhaar)",
+      "expectedSensitive": false,
+      "detected": true,
+      "result": "FP",
+      "iou": 0
+    },
+    {
+      "id": "safe-item-quantity",
+      "name": "Simple inventory count and product quantity",
+      "expectedSensitive": false,
+      "detected": false,
+      "result": "TN",
+      "iou": 1
+    },
+    {
+      "id": "safe-date-slashes",
+      "name": "Formatted calendar date with slashes",
+      "expectedSensitive": false,
+      "detected": false,
+      "result": "TN",
+      "iou": 1
+    },
+    {
+      "id": "safe-account-summary",
+      "name": "Harmless masked account summary note",
+      "expectedSensitive": false,
+      "detected": false,
+      "result": "TN",
+      "iou": 1
+    }
+  ]
+}

@@ -12,6 +12,7 @@
     "ext:dev": "cd extension && npm run dev",
     "ext:build": "cd extension && npm run build",
     "ext:test": "cd extension && npm test",
+    "benchmark": "cd extension && npm run benchmark",
     "backend:install": "cd backend && pip install -r requirements.txt",
     "backend:dev": "cd backend && uvicorn app.main:app --reload --host 0.0.0.0 --port 8000",
     "test": "cd extension && npm test && cd ../backend && venv/bin/pytest",

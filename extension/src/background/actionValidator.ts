@@ -165,7 +165,31 @@ export function validateAction(action: Action, domElements: DOMElement[]): void 
       if (action.action === 'type' && (action.text === undefined || action.text === null)) {
         throw new ActionValidationError('Type action requires text parameter');
       }
-      
+
+      // Check coordinate targets (e.g. "coord:100,200" or "100,200")
+      const coordMatch = action.target.match(/^(?:coord:)?(\d+(?:\.\d+)?)[,x](\d+(?:\.\d+)?)$/);
+      if (coordMatch) {
+        const x = parseFloat(coordMatch[1]);
+        const y = parseFloat(coordMatch[2]);
+        if (x < 0 || y < 0 || x > 5000 || y > 5000) {
+          throw new ActionValidationError(`Coordinate target "${action.target}" is out of bounds.`);
+        }
+        // Check if coordinate intersects any password element
+        const hitEl = domElements.find((el) => {
+          if (!el.bbox) return false;
+          return (
+            x >= el.bbox.x &&
+            x <= el.bbox.x + el.bbox.width &&
+            y >= el.bbox.y &&
+            y <= el.bbox.y + el.bbox.height
+          );
+        });
+        if (hitEl && action.action === 'type' && (hitEl.input_type === 'password' || hitEl.type === 'password')) {
+          throw new ActionValidationError('Typing into password fields is prohibited by safety policy.');
+        }
+        break;
+      }
+
       const targetQuery = action.target.toLowerCase();
       const targetEl = domElements.find(
         (el) =>

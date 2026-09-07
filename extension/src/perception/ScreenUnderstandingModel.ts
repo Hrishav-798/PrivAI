@@ -27,7 +27,7 @@ export interface IScreenUnderstandingModel {
 export class ScreenUnderstandingModel implements IScreenUnderstandingModel {
   private ready: boolean = false;
   private backend: LocalVisionBackend = 'none';
-  private modelName: string = 'PrivAI-ScreenViT-Local (384x384)';
+  private modelName: string = 'PrivAI-ScreenAnalyzer (Pixel-CV Heuristic)';
   private lastInferenceTime: number = 0;
   private session: ort.InferenceSession | null = null;
 

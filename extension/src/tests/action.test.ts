@@ -3,8 +3,7 @@ import { validateAction, classifyActionRisk, buildConfirmationRequest } from '..
 import { executeAction } from '../content/executor';
 import { Action, DOMElement } from '../types';
 
-describe('Action Validation & Safety Gate', () => {
-  const mockElements: DOMElement[] = [
+const mockElements: DOMElement[] = [
     {
       element_id: 'agent-btn-0',
       tag: 'button',
@@ -94,6 +93,7 @@ describe('Action Validation & Safety Gate', () => {
     },
   ];
 
+describe('Action Validation & Safety Gate', () => {
   it('accepts valid click and type actions', () => {
     const clickAction: Action = { action: 'click', target: 'agent-btn-0' };
     expect(() => validateAction(clickAction, mockElements)).not.toThrow();
@@ -292,4 +292,30 @@ describe('Browser Executor Actions', () => {
     await executeAction({ action: 'press_key', key: 'enter', target: 'agent-input-0' });
     expect(keySpy).toHaveBeenCalled();
   });
+
+  it('validates coordinate targets within viewport and blocks out-of-bounds coordinates', () => {
+    expect(() => validateAction({ action: 'click', target: 'coord:150,200' }, mockElements)).not.toThrow();
+    expect(() => validateAction({ action: 'click', target: '150,200' }, mockElements)).not.toThrow();
+    expect(() => validateAction({ action: 'click', target: 'coord:-50,200' }, mockElements)).toThrow();
+  });
+
+  it('prohibits coordinate-based typing when target intersects a password field', () => {
+    // mockElements[3] is at x: 10, y: 130, width: 150, height: 30 (password field)
+    expect(() =>
+      validateAction({ action: 'type', target: 'coord:50,140', text: 'secret123' }, mockElements)
+    ).toThrow(/password/i);
+  });
+
+  it('executes click using coordinate target and elementFromPoint fallback', async () => {
+    const btn = document.getElementById('search-btn') as HTMLButtonElement;
+    document.elementFromPoint = vi.fn().mockReturnValue(btn);
+
+    const clickEventSpy = vi.fn();
+    btn.addEventListener('click', clickEventSpy);
+
+    await executeAction({ action: 'click', target: 'coord:100,50' });
+    expect(document.elementFromPoint).toHaveBeenCalledWith(100, 50);
+    expect(clickEventSpy).toHaveBeenCalled();
+  });
 });
+

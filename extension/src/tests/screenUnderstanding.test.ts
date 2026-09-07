@@ -83,7 +83,7 @@ describe('Real Vision-Based Screen Understanding Pipeline', () => {
 
       expect(model.isReady()).toBe(true);
       expect(model.getBackend()).toBe('webgpu');
-      expect(model.getModelName()).toContain('ScreenViT');
+      expect(model.getModelName()).toContain('ScreenAnalyzer');
     });
 
     it('gracefully falls back to WASM when WebGPU fails', async () => {

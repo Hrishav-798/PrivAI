@@ -29,6 +29,8 @@ import { LocalTextDetector, ILocalTextDetector } from '../perception/LocalTextDe
 import { mergeDetections } from '../perception/detectionMerger';
 import { isGreeting, isReadOnlyTask, isTaskLikelyComplete, buildStepHistorySummary } from './agentPlanner';
 import { validateActionResult, getStatusEmoji } from './agentValidator';
+import { RemoteContextClient } from '../network/RemoteContextClient';
+import { TransmissionGate, PrivacyViolationError } from '../network/TransmissionGate';
 
 export class AgentLoop {
   private state: DashboardState;
@@ -36,6 +38,7 @@ export class AgentLoop {
   private privacyEngine: PrivacyEngine;
   private localVision: ILocalVisionModel;
   private localTextDetector: ILocalTextDetector;
+  private remoteClient: RemoteContextClient;
   private testFailureMode: boolean = false;
   private targetTabId: number | null = null;
   private backendBaseUrl: string = 'http://localhost:8000';
@@ -47,6 +50,7 @@ export class AgentLoop {
     this.privacyEngine = new PrivacyEngine();
     this.localVision = new LocalVisionClient();
     this.localTextDetector = new LocalTextDetector();
+    this.remoteClient = new RemoteContextClient(this.backendBaseUrl);
     this.state = this.getInitialState();
 
     // Initialize vision model asynchronously
@@ -68,7 +72,7 @@ export class AgentLoop {
       this.postSystemEvent(
         'model_initialized',
         'Local Text Detector Ready',
-        `Pixel OCR-pass detector loaded via ${this.localTextDetector.getBackend()}`
+        `Pixel text-region detector loaded via ${this.localTextDetector.getBackend()}`
       );
     }).catch(() => {});
 
@@ -79,14 +83,10 @@ export class AgentLoop {
 
   private async sendHeartbeat() {
     try {
-      await fetch(`${this.backendBaseUrl}/api/heartbeat`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          vision_backend: this.localVision?.getBackend() || 'wasm',
-          vision_model: this.localVision?.getModelName() || 'UltraFace ONNX',
-          version: '1.0.0',
-        }),
+      await this.remoteClient.sendHeartbeat({
+        vision_backend: this.localVision?.getBackend() || 'wasm',
+        vision_model: this.localVision?.getModelName() || 'UltraFace ONNX',
+        version: '1.0.0',
       });
     } catch {}
   }
@@ -166,17 +166,7 @@ export class AgentLoop {
     level: string = 'info'
   ) {
     try {
-      await fetch(`${this.backendBaseUrl}/api/events`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          event,
-          label,
-          detail,
-          timestamp: Date.now(),
-          level,
-        }),
-      });
+      await this.remoteClient.postSystemEvent(event, label, detail, level);
     } catch {
       // Backend may be offline; silently ignore event dispatch error
     }
@@ -378,9 +368,8 @@ export class AgentLoop {
       sanitizedContext = await this.privacyEngine.process(rawContext, visionSensitiveRegions);
 
       if (this.testFailureMode) {
-        // Deliberately leak unredacted email to demonstrate Hard Network Gate
+        // Deliberately corrupt sanitized context to verify TransmissionGate blocks transmission
         sanitizedContext.dom.elements[0].text = 'leaked_raw_email@example.com';
-        throw new Error('Hard Network Gate Blocked: Unredacted PII detected (Failure Demo)');
       }
 
       const privacyMs = performance.now() - privacyStart;
@@ -400,7 +389,7 @@ export class AgentLoop {
       this.postSystemEvent(
         'privacy_passed',
         'Local Privacy Firewall Passed',
-        `${sanitizedContext.privacy.regions_redacted} sensitive regions sanitized locally in ${privacyMs.toFixed(1)}ms. Request ALLOWED.`
+        `${sanitizedContext.privacy.regions_redacted} sensitive regions sanitized locally in ${privacyMs.toFixed(1)}ms. Context ready for transmission gate.`
       );
     } catch (err: any) {
       this.updateState({
@@ -435,12 +424,45 @@ export class AgentLoop {
       return;
     }
 
-    // 5. SERVER-SIDE REASONING (FastAPI + Ollama VLM)
+    // 5. TRANSMISSION GATE & SERVER-SIDE REASONING (via RemoteContextClient)
     this.updateState({ agentState: 'SENDING', networkStatus: 'SAFE' });
-    this.addTimelineEvent('REQUEST SENT', 'Transmitting sanitized context only to FastAPI');
+    this.addTimelineEvent('TRANSMISSION GATE', 'Verifying context through Hard TransmissionGate before transmission');
 
     const networkStart = performance.now();
-    const actionResponse = await this.sendToBackend(sanitizedContext, this.state.task);
+    let actionResponse: ActionResponse;
+    try {
+      actionResponse = await this.remoteClient.plan(sanitizedContext, this.state.task, this.stepHistory);
+    } catch (netErr: any) {
+      this.updateState({
+        agentState: 'NETWORK_BLOCKED',
+        privacyStatus: 'BLOCKED',
+        networkStatus: 'BLOCKED',
+      });
+      const guidance = `⚠️ Hard Transmission Gate Blocked: ${netErr.message || 'Security boundary violation'} — 0 bytes transmitted.`;
+      this.addTimelineEvent('TRANSMISSION GATE BLOCKED', guidance);
+      this.postSystemEvent(
+        'request_blocked',
+        'HARD TRANSMISSION GATE BLOCKED',
+        guidance,
+        'error'
+      );
+
+      if (this.targetTabId && typeof chrome !== 'undefined' && chrome.tabs?.sendMessage) {
+        try {
+          chrome.tabs.sendMessage(this.targetTabId, {
+            type: 'PRIVACY_GATE_BLOCKED',
+            payload: {
+              message: guidance,
+              reason: netErr.message,
+              step: this.currentStep,
+            },
+          }, () => {});
+        } catch {}
+      }
+
+      this.isRunning = false;
+      return;
+    }
     const networkMs = performance.now() - networkStart;
 
     this.updateState({ agentState: 'REASONING' });
@@ -640,18 +662,12 @@ export class AgentLoop {
     this.updateState({ metrics });
 
     // Send execution result back to backend for dashboard telemetry
-    try {
-      await fetch(`${this.backendBaseUrl}/api/agent/execute-result`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: actionResponse.action,
-          success: execSuccess,
-          error: execError,
-          metrics,
-        }),
-      });
-    } catch {}
+    await this.remoteClient.sendExecuteResult({
+      action: actionResponse.action,
+      success: execSuccess,
+      error: execError,
+      metrics,
+    });
   }
 
   // --- Helper Methods ---
@@ -668,17 +684,6 @@ export class AgentLoop {
   private async dataUrlToBlob(dataUrl: string): Promise<Blob> {
     const res = await fetch(dataUrl);
     return await res.blob();
-  }
-
-  private async blobToBase64(blob: Blob): Promise<string> {
-    const buffer = await blob.arrayBuffer();
-    const bytes = new Uint8Array(buffer);
-    let binary = '';
-    const len = bytes.byteLength;
-    for (let i = 0; i < len; i++) {
-      binary += String.fromCharCode(bytes[i]);
-    }
-    return `data:image/png;base64,${btoa(binary)}`;
   }
 
   private async resolveActiveTabId(): Promise<number> {
@@ -796,40 +801,5 @@ export class AgentLoop {
         }
       );
     });
-  }
-
-
-  private async sendToBackend(
-    sanitized: SanitizedContext,
-    task: string
-  ): Promise<ActionResponse> {
-    const screenshotBase64 = await this.blobToBase64(sanitized.screenshot as unknown as Blob);
-
-    const payload = {
-      task,
-      screen: { width: 1440, height: 900 },
-      sanitized_dom: sanitized.dom.elements,
-      redactions: sanitized.redactions,
-      privacy: sanitized.privacy,
-      sanitized_screenshot: screenshotBase64,
-      page_title: sanitized.dom.title || '',
-      page_url: sanitized.dom.url || '',
-      page_state: sanitized.dom.pageState || null,
-      semantic_tree: sanitized.dom.semanticTree || '',
-      step_history: buildStepHistorySummary(this.stepHistory),
-    };
-
-    const res = await fetch(`${this.backendBaseUrl}/api/agent/plan`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-
-    if (!res.ok) {
-      const errTxt = await res.text();
-      throw new Error(`FastAPI server returned ${res.status}: ${errTxt}`);
-    }
-
-    return await res.json();
   }
 }

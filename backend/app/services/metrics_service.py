@@ -32,7 +32,7 @@ class MetricsService:
             "total_ms": 70.1,
         }
         self._last_client_resources: dict[str, Any] = {
-            "model_name": "PrivAI-ScreenViT + UltraFace Slim ONNX",
+            "model_name": "UltraFace Slim ONNX + Pixel-CV Heuristics",
             "model_size_mb": 2.45,
             "vision_inference_ms": 12.7,
             "backend": "webgpu (WASM & heuristic fallback)",
@@ -76,15 +76,55 @@ class MetricsService:
 
     def get_metrics_report(self) -> dict[str, Any]:
         total_redacted = sum(self._entities_redacted.values())
-        return {
-            "summary": {
-                "total_requests": self._total_requests,
-                "total_leaks_blocked": self._total_leaks_blocked,
-                "total_entities_redacted": total_redacted,
-                "leak_egress_rate": 0.0,  # Zero-leak guarantee
-            },
-            "privacy_breakdown": self._entities_redacted,
-            "evaluation_benchmarks": {
+        
+        # Check for real benchmark suite results
+        import json
+        from pathlib import Path
+        
+        bench_file = Path(__file__).resolve().parent.parent / "data" / "benchmark-results.json"
+        bench_data = None
+        if bench_file.exists():
+            try:
+                with open(bench_file, "r", encoding="utf-8") as f:
+                    bench_data = json.load(f)
+            except Exception:
+                pass
+
+        if bench_data and "pii" in bench_data:
+            pii = bench_data["pii"]
+            red = bench_data.get("redaction", {})
+            hw = bench_data.get("hardwareProfiles", [])
+            lat = bench_data.get("latency", {})
+            models = bench_data.get("modelAssets", [])
+
+            benchmarks = {
+                "source": "MEASURED_GROUND_TRUTH_BENCHMARK",
+                "pii_precision_recall": {
+                    "evaluation_corpus": f"PrivAI Ground Truth Suite ({pii.get('totalCases', 0)} cases)",
+                    "true_positives": pii.get("truePositives", 0),
+                    "false_positives": pii.get("falsePositives", 0),
+                    "false_negatives": pii.get("falseNegatives", 0),
+                    "true_negatives": pii.get("trueNegatives", 0),
+                    "precision_pct": pii.get("precision", 0.0),
+                    "recall_pct": pii.get("recall", 0.0),
+                    "f1_score_pct": pii.get("f1Score", 0.0),
+                },
+                "redaction_precision": {
+                    "iou_coverage_pct": red.get("averageIoU", 0.0),
+                    "coverage_pct": red.get("coveragePercent", 0.0),
+                    "missed_regions": red.get("missedRegions", 0),
+                    "over_redacted_regions": red.get("falseRedactions", 0),
+                },
+                "hardware_profiles": hw,
+                "latency_profile": lat,
+                "model_assets": models,
+                "client_resource_footprint": self._last_client_resources,
+                "end_to_end_latency": self._last_latency_breakdown,
+                "model_routing": self._model_routing_counts,
+            }
+        else:
+            benchmarks = {
+                "source": "ESTIMATED_BASELINE",
                 "visual_accuracy": {
                     "detected_elements": 95,
                     "correct_elements": 92,
@@ -134,9 +174,20 @@ class MetricsService:
                 "client_resource_footprint": self._last_client_resources,
                 "end_to_end_latency": self._last_latency_breakdown,
                 "model_routing": self._model_routing_counts,
+            }
+
+        return {
+            "summary": {
+                "total_requests": self._total_requests,
+                "total_leaks_blocked": self._total_leaks_blocked,
+                "total_entities_redacted": total_redacted,
+                "leak_egress_rate": 0.0,  # Zero-leak guarantee
             },
+            "privacy_breakdown": self._entities_redacted,
+            "evaluation_benchmarks": benchmarks,
             "timestamp": time.time() * 1000,
         }
 
 
 metrics_service = MetricsService()
+

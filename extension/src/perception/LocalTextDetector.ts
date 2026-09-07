@@ -1,15 +1,18 @@
 /**
- * PrivAI — Local Text Region Detector (Viewport Pixel OCR-Pass)
+ * PrivAI — Local Text Region Detector (Pixel Gradient Heuristic)
  *
  * Operates directly on the captured viewport screenshot (pixels, not DOM) to catch
  * sensitive text baked into images, canvas-rendered content, PDF viewers, ID card
  * photos, and pasted graphics.
  *
- * Architectural Design & Model Evaluation:
- * 1. Option A (DBNet Mobile ONNX ~3.8 MB): High recall on scene text; ~25ms WebGPU, ~65ms WASM.
- * 2. Option B (PaddleOCR Detection Mobile ~2.6 MB): Optimized for document and UI text; ~20ms WebGPU, ~52ms WASM.
- * 3. Option C (Local Luminance Gradient & MSER Contour Segmenter): 0 MB external download, ~4-10ms,
- *    instant fallback when offline or in low-power environments.
+ * Implementation: Local luminance gradient & edge contour segmenter.
+ * This is a HEURISTIC pixel analysis pass, NOT a learned neural OCR model.
+ * It detects text-dense horizontal strips via high-frequency edge density analysis.
+ * No external model weights are required (0 MB download, ~4-10ms latency).
+ *
+ * If a real ONNX text detection model (e.g. DBNet) is provided at
+ * 'models/text_detector.onnx', the detector will use it via WebGPU/WASM.
+ * Otherwise it transparently falls back to the pixel gradient heuristic.
  *
  * Supported execution providers: 'webgpu' | 'wasm' | 'fallback-heuristic'
  */
@@ -30,7 +33,7 @@ export interface ILocalTextDetector {
 export class LocalTextDetector implements ILocalTextDetector {
   private ready: boolean = false;
   private backend: LocalVisionBackend = 'none';
-  private modelName: string = 'PrivAI-TextDetector-Compact (DBNet-Mobile)';
+  private modelName: string = 'PrivAI-TextRegionDetector (Pixel-Gradient-Heuristic)';
   private lastInferenceTime: number = 0;
   private session: ort.InferenceSession | null = null;
 

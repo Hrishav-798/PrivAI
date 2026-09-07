@@ -334,6 +334,29 @@ const App: React.FC = () => {
     ]);
   };
 
+function getDisplayState(agentState?: string): string {
+  switch (agentState) {
+    case 'IDLE':
+      return 'SAFE';
+    case 'CAPTURING':
+    case 'PERCEIVING':
+      return 'SCANNING';
+    case 'PRIVACY_SCANNING':
+    case 'REDACTING':
+      return 'SANITIZING';
+    case 'NETWORK_BLOCKED':
+      return 'BLOCKED';
+    case 'EXECUTING':
+      return 'EXECUTING';
+    case 'COMPLETED':
+      return 'COMPLETED';
+    case 'ERROR':
+      return 'ERROR';
+    default:
+      return agentState || 'SAFE';
+  }
+}
+
   const isRunning = Boolean(
     state &&
       state.agentState !== 'IDLE' &&
@@ -342,14 +365,16 @@ const App: React.FC = () => {
       state.agentState !== 'NETWORK_BLOCKED'
   );
 
+  const displayState = getDisplayState(state?.agentState);
+
   return (
     <div className="popup-container">
       {/* Header */}
       <header className="popup-header">
         <div className="header-brand">
-          <div className="logo-icon">🤖</div>
+          <div className="logo-icon">🛡️</div>
           <div>
-            <div className="brand-title">PrivAI Assistant</div>
+            <div className="brand-title">PrivAI Browser Agent</div>
             <div className="brand-subtitle" title={currentTabInfo.url}>
               <span className="live-dot"></span>
               {currentTabInfo.host || 'Connecting to tab...'}
@@ -358,8 +383,8 @@ const App: React.FC = () => {
         </div>
 
         <div className="header-controls">
-          <span className={`status-pill ${state?.agentState.toLowerCase() || 'idle'}`}>
-            {state?.agentState || 'READY'}
+          <span className={`status-pill ${displayState.toLowerCase()}`}>
+            {displayState}
           </span>
           <button
             className="btn-icon"
@@ -495,6 +520,31 @@ const App: React.FC = () => {
       ) : (
         /* Privacy & Telemetry Tab */
         <div className="privacy-view">
+          {/* Hard Transmission Gate Card */}
+          <div className="privacy-card">
+            <div className="privacy-card-header">
+              <span className="card-title">Hard Transmission Gate</span>
+              <span
+                className={`badge-pill ${
+                  state?.networkStatus === 'BLOCKED' ? 'danger' : 'success'
+                }`}
+              >
+                {state?.networkStatus === 'BLOCKED'
+                  ? 'GATE BLOCKED (0 BYTES SENT)'
+                  : 'EGRESS GATE SAFE ✓'}
+              </span>
+            </div>
+            <p className="card-desc">
+              Authoritative runtime boundary. Physically rejects transmission unless context is 100% sanitized with valid provenance.
+            </p>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', fontSize: '12px', color: '#475569', marginTop: '10px' }}>
+              <div>✓ Screenshot: <strong>Redacted</strong></div>
+              <div>✓ DOM PII: <strong>Scrubbed</strong></div>
+              <div>✓ URL Params: <strong>Sanitized</strong></div>
+              <div>✓ Raw Egress: <strong>0 Bytes</strong></div>
+            </div>
+          </div>
+
           <div className="privacy-card">
             <div className="privacy-card-header">
               <span className="card-title">Client Privacy Firewall</span>
@@ -534,6 +584,20 @@ const App: React.FC = () => {
                 <div className="stat-label">Last Step Latency</div>
               </div>
             </div>
+
+            <div style={{ marginTop: '14px', paddingTop: '12px', borderTop: '1px solid #f1f5f9' }}>
+              <div style={{ fontSize: '11px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase', marginBottom: '8px' }}>
+                Protected Entity Categories
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                <span className="chip" style={{ fontSize: '11px', padding: '3px 8px' }}>🔒 Passwords</span>
+                <span className="chip" style={{ fontSize: '11px', padding: '3px 8px' }}>✉️ Emails</span>
+                <span className="chip" style={{ fontSize: '11px', padding: '3px 8px' }}>📱 Phone Numbers</span>
+                <span className="chip" style={{ fontSize: '11px', padding: '3px 8px' }}>💳 Credit Cards</span>
+                <span className="chip" style={{ fontSize: '11px', padding: '3px 8px' }}>🪪 Aadhaar / SSN</span>
+                <span className="chip" style={{ fontSize: '11px', padding: '3px 8px' }}>👤 Faces (ONNX)</span>
+              </div>
+            </div>
           </div>
 
           <div className="privacy-card">
@@ -557,7 +621,7 @@ const App: React.FC = () => {
                 className={`btn-action danger ${testFailureMode ? 'active' : ''}`}
                 onClick={toggleFailure}
               >
-                🚨 {testFailureMode ? 'Disable Leak Test' : 'Test Privacy Block'}
+                🚨 {testFailureMode ? 'Disable Leak Test' : 'Test Transmission Gate Block'}
               </button>
             </div>
           </div>

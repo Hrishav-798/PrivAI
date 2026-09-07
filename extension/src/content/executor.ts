@@ -148,6 +148,17 @@ function findTargetElement(id: string): Element | null {
     }
   }
 
+  // 10. Coordinate target fallback ("coord:x,y" or "x,y")
+  const coordMatch = id.match(/^(?:coord:)?(\d+(?:\.\d+)?)[,x](\d+(?:\.\d+)?)$/);
+  if (coordMatch) {
+    const x = parseFloat(coordMatch[1]);
+    const y = parseFloat(coordMatch[2]);
+    if (typeof document.elementFromPoint === 'function') {
+      const el = document.elementFromPoint(x, y);
+      if (el) return el;
+    }
+  }
+
   return null;
 }
 
@@ -158,6 +169,11 @@ async function findTargetWithRetry(id: string): Promise<Element> {
   // First try
   let el = findTargetElement(id);
   if (el) return el;
+
+  // If coordinate target, do not scroll-retry (coordinates are viewport-relative)
+  if (/^(?:coord:)?\d+(?:\.\d+)?[,x]\d+(?:\.\d+)?$/.test(id)) {
+    throw new Error(`Coordinate target "${id}" points to no interactable element in viewport`);
+  }
 
   // Scroll down a bit and try again (element may be lazy-loaded or below viewport)
   if (typeof window.scrollBy === 'function') {
@@ -183,9 +199,10 @@ async function findTargetWithRetry(id: string): Promise<Element> {
 
 async function executeClick(id: string): Promise<void> {
   const el = await findTargetWithRetry(id);
+  const coordMatch = id.match(/^(?:coord:)?(\d+(?:\.\d+)?)[,x](\d+(?:\.\d+)?)$/);
 
-  // Scroll into view safely
-  if (el instanceof HTMLElement && typeof el.scrollIntoView === 'function') {
+  // Scroll into view safely if not a coordinate click
+  if (!coordMatch && el instanceof HTMLElement && typeof el.scrollIntoView === 'function') {
     el.scrollIntoView({ behavior: 'smooth', block: 'center' });
     await new Promise((r) => setTimeout(r, 200));
   }
@@ -193,6 +210,14 @@ async function executeClick(id: string): Promise<void> {
   // Check if element is enabled
   if (el instanceof HTMLButtonElement && el.disabled) {
     throw new Error(`Target element "${id}" is disabled`);
+  }
+
+  if (coordMatch) {
+    const x = parseFloat(coordMatch[1]);
+    const y = parseFloat(coordMatch[2]);
+    if (el instanceof HTMLElement && typeof el.focus === 'function') el.focus();
+    el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, clientX: x, clientY: y }));
+    return;
   }
 
   if (el instanceof HTMLElement) {

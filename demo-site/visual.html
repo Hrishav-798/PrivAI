@@ -101,7 +101,62 @@
         <button class="btn" style="margin-top: 14px; width: 100%;" id="btn-view-david" onclick="alert('View profile')">View Profile</button>
       </div>
     </div>
+
+    <div style="max-width: 1000px; margin: 30px auto; padding: 0 20px;">
+      <div style="background: white; border: 1px solid #e2e8f0; border-radius: 12px; padding: 24px; box-shadow: 0 4px 16px rgba(0,0,0,0.05);">
+        <h2 style="font-size: 18px; color: #0f172a; margin-bottom: 8px;">Canvas Pixel Text & Receipt Redaction Benchmark</h2>
+        <p style="font-size: 13px; color: #64748b; margin-bottom: 16px;">
+          The receipt below is drawn directly onto an HTML5 <code>&lt;canvas&gt;</code> element with no underlying DOM text nodes. PrivAI's visual contour detection identifies sensitive pixel regions on the canvas for local redaction.
+        </p>
+        <div style="display: flex; gap: 24px; flex-wrap: wrap; align-items: flex-start;">
+          <canvas id="receipt-canvas" width="420" height="240" style="border: 1px solid #cbd5e1; border-radius: 8px; background: #fafafa;"></canvas>
+          <div style="flex: 1; min-width: 260px; font-size: 13px; color: #475569; line-height: 1.6;">
+            <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px;">
+              <strong style="color: #0f172a; display: block; margin-bottom: 6px;">Visual Pipeline Details:</strong>
+              • <strong>Neural Model:</strong> UltraFace Slim ONNX (1.14 MB) detects faces locally via WebGPU/WASM.<br>
+              • <strong>Canvas Text Detection:</strong> Local pixel-gradient contouring scans high-contrast text clusters rendered in canvas buffers.<br>
+              • <strong>Limitation Disclosure:</strong> Complex low-contrast raster graphics require a full neural OCR model; PrivAI's current browser build uses honest heuristic pixel-contour detection without falsely claiming full neural OCR.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   </main>
+
+  <script>
+    const canvas = document.getElementById('receipt-canvas');
+    if (canvas && canvas.getContext) {
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      
+      ctx.fillStyle = '#0f172a';
+      ctx.font = 'bold 15px monospace';
+      ctx.fillText('*** SYNTHETIC PAYMENT RECEIPT ***', 20, 32);
+      
+      ctx.strokeStyle = '#cbd5e1';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(20, 44);
+      ctx.lineTo(400, 44);
+      ctx.stroke();
+
+      ctx.font = '13px monospace';
+      ctx.fillStyle = '#334155';
+      ctx.fillText('MERCHANT: PrivAI Cloud Compute Labs', 20, 72);
+      ctx.fillText('DATE: 2026-09-08 10:45:00 UTC', 20, 96);
+      ctx.fillText('CUSTOMER: Alex Morgan', 20, 120);
+      
+      ctx.fillStyle = '#b91c1c';
+      ctx.font = 'bold 13px monospace';
+      ctx.fillText('CARD NUMBER: 4111-1111-1111-1111', 20, 150);
+      ctx.fillText('AUTH CODE: SEC-849204-AUTH', 20, 175);
+      
+      ctx.fillStyle = '#0f172a';
+      ctx.font = 'bold 14px monospace';
+      ctx.fillText('TOTAL BILLED: $249.99 USD', 20, 210);
+    }
+  </script>
   <!-- In-page PrivAI Assistant Widget -->
   <script src="js/assistant.js"></script>
 </body>

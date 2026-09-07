@@ -1,5 +1,6 @@
 import { RawDOM, SanitizedDOM, SensitiveRegion, DOMElement } from '../../types';
 import { PageState } from '../../types/common';
+import { sanitizeUrl } from '../sanitization/urlSanitizer';
 
 function capText(str: string, maxLen: number = 80): string {
   if (str.length <= maxLen) return str;
@@ -21,12 +22,16 @@ function buildSemanticTree(elements: DOMElement[], pageState: PageState): string
     const tag = el.tag;
     const attrs: string[] = [];
 
+    const rawAny = el as any;
     if (el.input_type && el.input_type !== el.tag) attrs.push(`type="${el.input_type}"`);
     if (el.href) attrs.push(`href="${capText(el.href)}"`);
     if (el.placeholder) attrs.push(`placeholder="${el.placeholder}"`);
     if (el.checked !== undefined) attrs.push(`checked="${el.checked}"`);
-    if (el.selectedValue) attrs.push(`value="${el.selectedValue}"`);
+    const val = el.selectedValue || rawAny.value;
+    if (val) attrs.push(`value="${val}"`);
     if (el.alt) attrs.push(`alt="${el.alt}"`);
+    if (rawAny.title) attrs.push(`title="${rawAny.title}"`);
+    if (rawAny['aria-label'] || rawAny.ariaLabel) attrs.push(`aria-label="${rawAny['aria-label'] || rawAny.ariaLabel}"`);
 
     const attrStr = attrs.length > 0 ? ' ' + attrs.join(' ') : '';
     const text = el.text ? ` "${capText(el.text)}"` : '';
@@ -70,7 +75,8 @@ export function sanitizeDOM(rawDOM: RawDOM, sensitiveRegions: SensitiveRegion[])
 
   const sanitizedElements: DOMElement[] = rawDOM.elements.map((el) => {
     const elId = el.element_id || el.id || '';
-    const sanitizedEl: DOMElement = {
+    const rawAny = el as any;
+    const sanitizedEl: DOMElement & Record<string, any> = {
       ...el,
       id: elId,
       element_id: elId,
@@ -80,68 +86,104 @@ export function sanitizeDOM(rawDOM: RawDOM, sensitiveRegions: SensitiveRegion[])
     const isPassword =
       el.input_type === 'password' ||
       el.type === 'password' ||
-      el.autocomplete?.includes('password') ||
-      elId.toLowerCase().includes('password');
+      rawAny.autocomplete?.toLowerCase().includes('password') ||
+      rawAny.name?.toLowerCase().includes('password') ||
+      rawAny.name?.toLowerCase().includes('passwd') ||
+      rawAny.name?.toLowerCase().includes('pwd') ||
+      elId.toLowerCase().includes('password') ||
+      elId.toLowerCase().includes('passwd') ||
+      elId.toLowerCase().includes('pwd') ||
+      elId.toLowerCase().includes('pin');
 
     const region = sensitiveMap.get(elId);
 
     if (isPassword) {
       sanitizedEl.text = '[REDACTED]';
+      sanitizedEl.value = '[REDACTED]';
+      sanitizedEl.selectedValue = '[REDACTED]';
       if (sanitizedEl.placeholder) sanitizedEl.placeholder = '[REDACTED]';
       if (sanitizedEl.label) sanitizedEl.label = '[REDACTED]';
       if (sanitizedEl.alt) sanitizedEl.alt = '[REDACTED]';
-      if (sanitizedEl.selectedValue) sanitizedEl.selectedValue = '[REDACTED]';
+      if (sanitizedEl.title) sanitizedEl.title = '[REDACTED]';
+      if (sanitizedEl['aria-label']) sanitizedEl['aria-label'] = '[REDACTED]';
+      if (sanitizedEl.ariaLabel) sanitizedEl.ariaLabel = '[REDACTED]';
+      if (sanitizedEl['aria-describedby']) sanitizedEl['aria-describedby'] = '[REDACTED]';
+      if (sanitizedEl.ariaDescribedBy) sanitizedEl.ariaDescribedBy = '[REDACTED]';
+      if (sanitizedEl.dataset && typeof sanitizedEl.dataset === 'object') {
+        const cleanData: Record<string, string> = {};
+        for (const k of Object.keys(sanitizedEl.dataset)) cleanData[k] = '[REDACTED]';
+        sanitizedEl.dataset = cleanData;
+      }
     } else if (region) {
-      if (sanitizedEl.text && sanitizedEl.text.trim() !== '') {
-        sanitizedEl.text = '[REDACTED]';
-      }
-      if (sanitizedEl.placeholder) {
-        sanitizedEl.placeholder = '[REDACTED]';
-      }
-      if (sanitizedEl.label) {
-        sanitizedEl.label = '[REDACTED]';
-      }
-      if (sanitizedEl.alt) {
-        sanitizedEl.alt = '[REDACTED]';
-      }
-      if (sanitizedEl.selectedValue) {
-        sanitizedEl.selectedValue = '[REDACTED]';
+      if (sanitizedEl.text) sanitizedEl.text = '[REDACTED]';
+      if (sanitizedEl.value) sanitizedEl.value = '[REDACTED]';
+      if (sanitizedEl.selectedValue) sanitizedEl.selectedValue = '[REDACTED]';
+      if (sanitizedEl.placeholder) sanitizedEl.placeholder = '[REDACTED]';
+      if (sanitizedEl.label) sanitizedEl.label = '[REDACTED]';
+      if (sanitizedEl.alt) sanitizedEl.alt = '[REDACTED]';
+      if (sanitizedEl.title) sanitizedEl.title = '[REDACTED]';
+      if (sanitizedEl['aria-label']) sanitizedEl['aria-label'] = '[REDACTED]';
+      if (sanitizedEl.ariaLabel) sanitizedEl.ariaLabel = '[REDACTED]';
+      if (sanitizedEl['aria-describedby']) sanitizedEl['aria-describedby'] = '[REDACTED]';
+      if (sanitizedEl.ariaDescribedBy) sanitizedEl.ariaDescribedBy = '[REDACTED]';
+      if (sanitizedEl.dataset && typeof sanitizedEl.dataset === 'object') {
+        const cleanData: Record<string, string> = {};
+        for (const k of Object.keys(sanitizedEl.dataset)) cleanData[k] = '[REDACTED]';
+        sanitizedEl.dataset = cleanData;
       }
     } else {
       // Global regex sanitization for unflagged elements (defense-in-depth)
-      if (sanitizedEl.text) {
-        sanitizedEl.text = sanitizeText(sanitizedEl.text);
+      if (typeof sanitizedEl.text === 'string') sanitizedEl.text = sanitizeText(sanitizedEl.text);
+      if (typeof sanitizedEl.value === 'string') sanitizedEl.value = sanitizeText(sanitizedEl.value);
+      if (typeof sanitizedEl.selectedValue === 'string') sanitizedEl.selectedValue = sanitizeText(sanitizedEl.selectedValue);
+      if (typeof sanitizedEl.placeholder === 'string') sanitizedEl.placeholder = sanitizeText(sanitizedEl.placeholder);
+      if (typeof sanitizedEl.label === 'string') sanitizedEl.label = sanitizeText(sanitizedEl.label);
+      if (typeof sanitizedEl.alt === 'string') sanitizedEl.alt = sanitizeText(sanitizedEl.alt);
+      if (typeof sanitizedEl.title === 'string') sanitizedEl.title = sanitizeText(sanitizedEl.title);
+      if (typeof sanitizedEl['aria-label'] === 'string') sanitizedEl['aria-label'] = sanitizeText(sanitizedEl['aria-label']);
+      if (typeof sanitizedEl.ariaLabel === 'string') sanitizedEl.ariaLabel = sanitizeText(sanitizedEl.ariaLabel);
+      if (typeof sanitizedEl['aria-describedby'] === 'string') sanitizedEl['aria-describedby'] = sanitizeText(sanitizedEl['aria-describedby']);
+      if (typeof sanitizedEl.ariaDescribedBy === 'string') sanitizedEl.ariaDescribedBy = sanitizeText(sanitizedEl.ariaDescribedBy);
+      if (sanitizedEl.dataset && typeof sanitizedEl.dataset === 'object') {
+        const cleanData: Record<string, string> = {};
+        for (const [k, v] of Object.entries(sanitizedEl.dataset)) {
+          cleanData[k] = typeof v === 'string' ? sanitizeText(v) : String(v);
+        }
+        sanitizedEl.dataset = cleanData;
       }
-      if (sanitizedEl.placeholder) {
-        sanitizedEl.placeholder = sanitizeText(sanitizedEl.placeholder);
-      }
-      if (sanitizedEl.label) {
-        sanitizedEl.label = sanitizeText(sanitizedEl.label);
-      }
-      if (sanitizedEl.alt) {
-        sanitizedEl.alt = sanitizeText(sanitizedEl.alt);
-      }
-      if (sanitizedEl.selectedValue) {
-        sanitizedEl.selectedValue = sanitizeText(sanitizedEl.selectedValue);
-      }
+    }
+
+    // Sanitize link attributes if present
+    if (sanitizedEl.href) {
+      sanitizedEl.href = sanitizeUrl(sanitizedEl.href);
+    }
+    if (sanitizedEl.src) {
+      sanitizedEl.src = sanitizeUrl(sanitizedEl.src);
     }
 
     return sanitizedEl;
   });
 
+  const sanitizedPageState = rawDOM.pageState
+    ? {
+        ...rawDOM.pageState,
+        url: sanitizeUrl(rawDOM.pageState.url),
+      }
+    : undefined;
+
   // Re-generate semantic tree strictly from sanitized elements so it never leaks
   let sanitizedSemanticTree: string | undefined = undefined;
-  if (rawDOM.pageState) {
-    sanitizedSemanticTree = buildSemanticTree(sanitizedElements, rawDOM.pageState);
+  if (sanitizedPageState) {
+    sanitizedSemanticTree = buildSemanticTree(sanitizedElements, sanitizedPageState);
   }
 
   return {
     __brand: 'SanitizedDOM',
     elements: sanitizedElements,
-    url: rawDOM.url,
+    url: sanitizeUrl(rawDOM.url),
     title: rawDOM.title,
     timestamp: rawDOM.timestamp,
-    pageState: rawDOM.pageState,
+    pageState: sanitizedPageState,
     semanticTree: sanitizedSemanticTree,
   };
 }

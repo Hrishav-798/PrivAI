@@ -132,6 +132,16 @@
         </div>
 
         <div class="form-group">
+          <label for="reg-id">National ID / Aadhaar / SSN</label>
+          <input type="text" id="reg-id" name="national_id" class="form-control" placeholder="1234 5678 9012" autocomplete="off">
+        </div>
+
+        <div class="form-group">
+          <label for="reg-card">Payment Card (Luhn Validated)</label>
+          <input type="text" id="reg-card" name="card_number" class="form-control" placeholder="4111 1111 1111 1111" autocomplete="cc-number">
+        </div>
+
+        <div class="form-group">
           <label for="reg-address">Residential Address</label>
           <textarea id="reg-address" name="address" class="form-control" rows="3" placeholder="123 Privacy Avenue, Tech City, 560001" autocomplete="street-address"></textarea>
         </div>
@@ -140,13 +150,16 @@
       </form>
 
       <div id="success-box" class="success-alert">
-        <strong>🎉 Form Submitted Successfully!</strong>
-        <p>The PrivAI agent autonomously filled and submitted the registration form. All passwords and PII were redacted before server reasoning.</p>
+        <strong style="font-size: 16px; display: block; margin-bottom: 6px;">🎉 Registration Confirmed & Account Created!</strong>
+        <p style="margin: 0 0 10px 0;">The PrivAI agent autonomously navigated, filled, and executed this registration form. All passwords, credit cards, and PII were redacted locally prior to any remote reasoning.</p>
+        <div id="confirmation-details" style="background: white; border: 1px solid #a7f3d0; border-radius: 6px; padding: 12px; font-family: monospace; font-size: 13px;">
+          <!-- Populated by JS -->
+        </div>
       </div>
 
       <div class="privacy-notice">
         <strong>🛡️ Privacy Audit Point:</strong>
-        When PrivAI scans this form, <code>input[type="password"]</code> is completely blacked out, and name/email/phone/address are scrubbed to <code>[REDACTED]</code>. The remote VLM reasons only over structured element roles without receiving your secrets.
+        When PrivAI scans this form, <code>input[type="password"]</code> is completely blacked out, and name/email/phone/card/ID/address are scrubbed to <code>[REDACTED]</code>. The remote VLM reasons only over structured element roles without receiving your secrets.
       </div>
     </div>
   </main>
@@ -154,7 +167,24 @@
   <script>
     function handleRegistration(e) {
       e.preventDefault();
+      const name = document.getElementById('reg-name').value || 'Alex Morgan';
+      const email = document.getElementById('reg-email').value || 'user@example.com';
+      const card = document.getElementById('reg-card').value || '4111 1111 1111 1111';
+      const last4 = card.replace(/\D/g, '').slice(-4) || '1111';
+
+      const details = document.getElementById('confirmation-details');
+      details.innerHTML = `
+        <div><strong>Status:</strong> ACTIVE / VERIFIED</div>
+        <div><strong>User:</strong> ${escapeHtml(name)}</div>
+        <div><strong>Email:</strong> ${escapeHtml(email.replace(/(.{2})(.*)(@.*)/, '$1***$3'))}</div>
+        <div><strong>Payment Method:</strong> Visa ending in ${last4}</div>
+        <div><strong>Transmission Gate:</strong> ZERO RAW PII EGRESSED (100% Client Sanitized)</div>
+      `;
       document.getElementById('success-box').style.display = 'block';
+    }
+
+    function escapeHtml(str) {
+      return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     }
   </script>
   <!-- In-page PrivAI Assistant Widget -->

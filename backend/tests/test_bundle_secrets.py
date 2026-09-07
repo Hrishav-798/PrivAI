@@ -15,6 +15,7 @@ SECRET_PATTERNS = [
     (re.compile(r'\bgh[posru]_[a-zA-Z0-9]{36,}\b'), "GitHub Personal Access Token"),
     (re.compile(r'\bAKIA[0-9A-Z]{16}\b'), "AWS Access Key ID"),
     (re.compile(r'CLOUD_VLM_API_KEY\s*[:=]\s*["\'][a-zA-Z0-9_\-]{8,}["\']'), "Hardcoded Cloud VLM Key"),
+    (re.compile(r'-----BEGIN (?:RSA |EC |DSA |OPENSSH )?PRIVATE KEY-----\s+[A-Za-z0-9+/=]{20,}'), "RSA/EC Private Key"),
 ]
 
 EXTENSION_ROOT = Path(__file__).resolve().parent.parent.parent / "extension"
@@ -65,8 +66,8 @@ def test_client_source_contains_no_secrets():
                 continue
 
             file_path = Path(root) / file
-            # Skip test fixtures where synthetic fake API keys are intentionally used to test redaction
-            if "tests" in file_path.parts:
+            # Skip test and benchmark fixtures where synthetic fake API keys are intentionally used to test redaction
+            if "tests" in file_path.parts or "benchmark" in file_path.parts:
                 continue
 
             scanned_files += 1
